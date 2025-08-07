@@ -6,7 +6,7 @@ interface TopNavBarProps {
 }
 
 const TopNavBar: React.FC<TopNavBarProps> = ({ projectId }) => {
-  const { projectData, isLoading, error } = useProjectData(projectId);
+  const { projectData, isLoading, error, refetch } = useProjectData(projectId);
 
   // Show loading state
   if (isLoading) {
@@ -21,10 +21,30 @@ const TopNavBar: React.FC<TopNavBarProps> = ({ projectId }) => {
 
   // Show error state
   if (error) {
+    // Check if it's a "project not found" error
+    const isProjectNotFound = error.includes('not found') || error.includes('does not exist');
+    const backgroundColor = isProjectNotFound ? 'rgba(239,68,68,255)' : 'rgba(139,69,19,255)';
+    
     return (
-      <div className="w-full shadow-lg border-0 flex items-center z-10" style={{ backgroundColor: 'rgba(139,69,19,255)', minHeight: '64px', fontFamily: 'Inter, Segoe UI, Arial, sans-serif', padding: '0' }}>
-        <div className="flex items-center justify-center w-full">
-          <span className="text-white text-sm">Error loading project data: {error}</span>
+      <div className="w-full shadow-lg border-0 flex items-center z-10" style={{ backgroundColor, minHeight: '64px', fontFamily: 'Inter, Segoe UI, Arial, sans-serif', padding: '0' }}>
+        <div className="flex items-center justify-center w-full gap-4">
+          <div className="flex flex-col items-center text-center">
+            <span className="text-white text-sm font-medium">
+              {isProjectNotFound ? `⚠️ Project "${projectId}" Not Found` : '❌ Error Loading Project Data'}
+            </span>
+            <span className="text-gray-200 text-xs mt-1">
+              {isProjectNotFound 
+                ? 'Please check the project ID in the URL and try again' 
+                : error
+              }
+            </span>
+          </div>
+          <button
+            onClick={refetch}
+            className="px-4 py-2 bg-white text-black rounded text-sm hover:bg-gray-100 transition-colors font-medium"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );

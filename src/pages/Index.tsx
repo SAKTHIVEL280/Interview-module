@@ -101,15 +101,26 @@ const Index = () => {
           // Upload file to backend
           const formData = new FormData();
           formData.append('file', file);
+          
+          console.log(`Uploading file: ${file.name}`);
           const response = await fetch('http://localhost:5000/api/upload', {
             method: 'POST',
             body: formData,
           });
-          if (!response.ok) throw new Error('Upload failed');
+          
+          console.log(`Upload response status: ${response.status}`);
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Upload failed with status ${response.status}:`, errorText);
+            throw new Error(`Upload failed: ${response.status}`);
+          }
+          
           const data = await response.json();
+          console.log('Upload successful:', data);
           uploadedFileUrls.push({ url: data.url, name: file.name });
         } catch (error) {
-          alert(`Upload failed for file: ${file.name}`);
+          console.error(`Upload error for file ${file.name}:`, error);
+          alert(`Upload failed for file: ${file.name}. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
           return; // Stop if any upload fails
         }
       }
@@ -414,7 +425,15 @@ const Index = () => {
                                     <iframe
                                       src={file.url}
                                       title={file.name}
-                                      className="w-full h-full text-xs pointer-events-none"
+                                      className="w-full h-full text-xs pointer-events-none [&::-webkit-scrollbar]:hidden"
+                                      scrolling="no"
+                                      style={{ 
+                                        overflow: 'hidden',
+                                        border: 'none',
+                                        outline: 'none',
+                                        scrollbarWidth: 'none',
+                                        msOverflowStyle: 'none'
+                                      }}
                                     />
                                   </a>
                                   <div className="text-xs text-gray-500 truncate mt-1 max-w-20" title={file.name}>
@@ -482,8 +501,17 @@ const Index = () => {
                             <iframe
                               src={msg.fileUrl}
                               title={msg.fileName}
-                              className="w-full h-32 border rounded"
-                              style={{ minWidth: '150px', maxWidth: '300px' }}
+                              className="w-full h-32 border rounded [&::-webkit-scrollbar]:hidden"
+                              style={{ 
+                                minWidth: '150px', 
+                                maxWidth: '300px', 
+                                overflow: 'hidden',
+                                border: 'none',
+                                outline: 'none',
+                                scrollbarWidth: 'none',
+                                msOverflowStyle: 'none'
+                              }}
+                              scrolling="no"
                             />
                           );
                         } else if (["png", "jpg", "jpeg", "gif", "bmp", "webp"].includes(ext || '')) {

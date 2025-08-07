@@ -20,14 +20,18 @@ export const useProjectData = (projectId: string) => {
         setIsLoading(true);
         setError(null);
         
+        console.log(`Loading project data for ID: ${projectId}`);
         const data = await fetchProjectData(projectId);
         
         if (isMounted) {
+          console.log('Project data loaded successfully:', data);
           setProjectData(data);
         }
       } catch (err) {
         if (isMounted) {
-          setError(err instanceof Error ? err.message : 'Failed to fetch project data');
+          const errorMessage = err instanceof Error ? err.message : 'Failed to fetch project data';
+          console.error('Error in useProjectData:', errorMessage);
+          setError(errorMessage);
         }
       } finally {
         if (isMounted) {
@@ -48,8 +52,15 @@ export const useProjectData = (projectId: string) => {
       setIsLoading(true);
       setError(null);
       fetchProjectData(projectId)
-        .then(setProjectData)
-        .catch((err) => setError(err instanceof Error ? err.message : 'Failed to fetch project data'))
+        .then((data) => {
+          console.log('Project data refetched:', data);
+          setProjectData(data);
+        })
+        .catch((err) => {
+          const errorMessage = err instanceof Error ? err.message : 'Failed to fetch project data';
+          console.error('Error in refetch:', errorMessage);
+          setError(errorMessage);
+        })
         .finally(() => setIsLoading(false));
     }
   };
