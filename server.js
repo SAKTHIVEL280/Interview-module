@@ -39,7 +39,7 @@ app.use((req, res, next) => {
 const dbConfig = {
   host: 'localhost',
   user: 'root',
-  password: 'root',
+  password: 'skyp',
   database: 'certaintimaster',
   port: 3306
 };

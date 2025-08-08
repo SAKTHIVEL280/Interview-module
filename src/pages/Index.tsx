@@ -2,8 +2,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Mic, MicOff, Paperclip, Send, ChevronDown } from 'lucide-react';
 import { useParams } from 'react-router-dom';
+import { ResizableBox } from 'react-resizable';
 import TopNavBar from '@/components/TopNavBar';
 import ProjectSummary from '@/components/ProjectSummary';
+import '../resizable.css';
 
 interface TimelineEntry {
   id: number;
@@ -52,6 +54,7 @@ const Index = () => {
   const [messageCounter, setMessageCounter] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(400); // Default fixed size
   const recognitionRef = useRef<any>(null);
 
   const chatMessagesRef = useRef<HTMLDivElement>(null);
@@ -297,6 +300,26 @@ const Index = () => {
     scrollToBottom();
   }, [chatMessages]);
 
+  // Handle window resize to maintain proper panel sizing
+  useEffect(() => {
+    const DEFAULT_LEFT_WIDTH = 400;
+    const handleResize = () => {
+      const minRightPanelWidth = Math.max(320, window.innerWidth * 0.25); // At least 25% of screen or 320px
+      const maxLeftWidth = window.innerWidth - minRightPanelWidth;
+      
+      // Ensure left panel is never smaller than default size and never larger than max allowed
+      if (leftPanelWidth > maxLeftWidth) {
+        setLeftPanelWidth(maxLeftWidth);
+      } else if (leftPanelWidth < DEFAULT_LEFT_WIDTH) {
+        setLeftPanelWidth(DEFAULT_LEFT_WIDTH);
+      }
+    };
+
+    handleResize(); // Call on mount
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [leftPanelWidth]);
+
   return (
     <div className="h-screen flex flex-col overflow-hidden" style={{ backgroundColor: 'rgba(220,232,255,255)' }}>
       {/* Top Navigation Bar with SME Project Info */}
@@ -305,73 +328,83 @@ const Index = () => {
       {/* Main Content Area */}
       <div className="flex h-full overflow-hidden">
         {/* Left Panel - Context Timeline */}
-        <div className="w-[30%] h-full border-r-0 flex flex-col bg-white shadow-lg">
-          {/* Fixed Conversation Summary Card */}
-          <div className="sticky top-0 z-10 p-8 border-b-0" style={{ backgroundColor: 'rgba(237,249,240,255)' }}>
-            <div className="rounded-xl p-6 shadow-sm border-0 flex flex-col items-center custom-scrollbar" style={{ minHeight: '120px', maxHeight: '220px', overflowY: 'auto', backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
-            <div className="font-semibold text-lg mb-3 w-full text-center" style={{ color: 'rgba(45,62,79,255)' }}>Summary</div>
-            <div className="space-y-3 text-sm w-full">
-              {/* Show only the summary from the project data, not the full TopNavBar */}
-              {/* Use a custom hook to fetch projectData and display summary */}
-              {projectId && <ProjectSummary projectId={projectId} />}
+        <ResizableBox
+          width={leftPanelWidth}
+          height={Infinity}
+          axis="x"
+          minConstraints={[400, Infinity]} // Same as default size - cannot go smaller
+          maxConstraints={[window.innerWidth - Math.max(320, window.innerWidth * 0.25), Infinity]}
+          onResize={(e, data) => setLeftPanelWidth(data.size.width)}
+          handle={<div className="resizable-handle" />}
+        >
+          <div className="w-full h-full border-r-0 flex flex-col bg-white shadow-lg overflow-hidden">
+            {/* Fixed Conversation Summary Card */}
+            <div className="sticky top-0 z-10 p-4 border-b-0" style={{ backgroundColor: 'rgba(237,249,240,255)' }}>
+              <div className="font-semibold text-lg mb-2 w-full text-left" style={{ color: 'rgba(45,62,79,255)' }}>Summary</div>
+              <div className="rounded-xl p-4 shadow-sm border-0 flex flex-col custom-scrollbar" style={{ minHeight: '120px', maxHeight: '220px', overflowY: 'auto', backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+                <div className="space-y-3 text-sm w-full">
+                  {/* Show only the summary from the project data, not the full TopNavBar */}
+                  {/* Use a custom hook to fetch projectData and display summary */}
+                  {projectId && <ProjectSummary projectId={projectId} />}
+                </div>
+              </div>
             </div>
+
+            {/* Context History Header */}
+            <div className="p-6 pb-0">
+              <div className="font-semibold text-lg mb-4" style={{ color: 'rgba(45,62,79,255)' }}>Context History</div>
             </div>
-          </div>
 
-          {/* Context History Header */}
-          <div className="p-6 pb-0">
-            <div className="font-semibold text-lg mb-4" style={{ color: 'rgba(45,62,79,255)' }}>Context History</div>
-          </div>
-
-          {/* Scrollable Timeline */}
-          <div className="flex-grow p-6 pt-2 overflow-y-auto">
-            <div className="relative min-h-[600px]">
-              {/* Show timeline line only when there are entries */}
-              {timelineEntries.length > 0 && (
-                <div className="absolute left-1/2 top-6 bottom-0 w-0.5 bg-gray-200 transform -translate-x-1/2"></div>
-              )}
-              
-              <div className="space-y-6 mt-6">
-                {timelineEntries.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className={`relative max-w-[80%] ${
-                      entry.type === 'user' 
-                        ? 'ml-[50%] pl-4' 
-                        : 'mr-[50%] pr-4 text-right'
-                    }`}
-                  >
-                    {/* Timeline Dot */}
-                    <div className={`absolute w-3 h-3 rounded-full top-3 border-2 border-white shadow-sm ${
-                      entry.type === 'user' 
-                        ? '-left-[6px]' 
-                        : '-right-[6px]'
-                    }`} style={entry.type === 'user' ? { backgroundColor: 'rgba(45,62,79,255)' } : { backgroundColor: '#9ca3af' }}></div>
-                    
-                    {/* Message Bubble */}
-                    <div className={`rounded-xl p-3 text-sm shadow-sm border-0 transition-all duration-200 hover:shadow-md break-words ${
-                      entry.type === 'user'
-                        ? 'text-gray-900'
-                        : 'bg-gray-50 text-gray-700'
-                    }`} style={entry.type === 'user' ? { backgroundColor: 'rgba(237,249,240,255)', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' } : { backgroundColor: 'rgba(220,232,255,255)', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-                      {entry.text}
+            {/* Scrollable Timeline */}
+            <div className="flex-grow p-6 pt-2 overflow-y-auto">
+              <div className="relative min-h-[600px]">
+                {/* Show timeline line only when there are entries */}
+                {timelineEntries.length > 0 && (
+                  <div className="absolute left-1/2 top-6 bottom-0 w-0.5 bg-gray-200 transform -translate-x-1/2"></div>
+                )}
+                
+                <div className="space-y-6 mt-6">
+                  {timelineEntries.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className={`relative max-w-[80%] ${
+                        entry.type === 'user' 
+                          ? 'ml-[50%] pl-4' 
+                          : 'mr-[50%] pr-4 text-right'
+                      }`}
+                    >
+                      {/* Timeline Dot */}
+                      <div className={`absolute w-3 h-3 rounded-full top-3 border-2 border-white shadow-sm ${
+                        entry.type === 'user' 
+                          ? '-left-[6px]' 
+                          : '-right-[6px]'
+                      }`} style={entry.type === 'user' ? { backgroundColor: 'rgba(45,62,79,255)' } : { backgroundColor: '#9ca3af' }}></div>
+                      
+                      {/* Message Bubble */}
+                      <div className={`rounded-xl p-3 text-sm shadow-sm border-0 transition-all duration-200 hover:shadow-md break-words ${
+                        entry.type === 'user'
+                          ? 'text-gray-900'
+                          : 'bg-gray-50 text-gray-700'
+                      }`} style={entry.type === 'user' ? { backgroundColor: 'rgba(237,249,240,255)', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' } : { backgroundColor: 'rgba(220,232,255,255)', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                        {entry.text}
+                      </div>
+                      
+                      {/* Timestamp */}
+                      <div className={`text-xs text-gray-500 mt-1 ${
+                        entry.type === 'bot' ? 'text-left' : 'text-right'
+                      }`}>
+                        {entry.timestamp} • {entry.date}
+                      </div>
                     </div>
-                    
-                    {/* Timestamp */}
-                    <div className={`text-xs text-gray-500 mt-1 ${
-                      entry.type === 'bot' ? 'text-left' : 'text-right'
-                    }`}>
-                      {entry.timestamp} • {entry.date}
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </ResizableBox>
 
         {/* Right Panel - Chat Area */}
-        <div className="w-[70%] h-full flex flex-col bg-white shadow-lg">
+        <div className="flex-grow h-full flex flex-col bg-white shadow-lg min-w-0 overflow-hidden">
           {/* Chat Header Removed */}
 
           {/* Chat Messages */}
@@ -382,7 +415,7 @@ const Index = () => {
             {chatMessages.map((msg) => (
               <div
                 key={msg.id}
-                className={`max-w-[70%] flex items-start gap-2 ${
+                className={`max-w-full flex items-start gap-2 ${
                   msg.type === 'bot' ? 'self-start flex-row' : 'self-end flex-row-reverse'
                 }`}
               >
@@ -399,95 +432,107 @@ const Index = () => {
                   )}
                 </div>
                 {/* Message Bubble and Timestamp */}
-                <div className="flex flex-col">
-                  <div className={`p-3 rounded-xl text-base shadow-sm border transition-all duration-200 hover:shadow-md break-words ${
+                <div className="flex flex-col min-w-0 flex-1 max-w-[calc(100%-3rem)]">
+                  <div className={`p-3 rounded-xl text-base shadow-sm border transition-all duration-200 hover:shadow-md break-words overflow-hidden ${
                     msg.type === 'bot'
                       ? 'bg-gray-100 border-gray-200 text-gray-700 rounded-tl-sm'
                       : 'rounded-tr-sm'
                   }`} style={msg.type === 'user' ? { backgroundColor: 'rgba(237,249,240,255)', border: '1px solid #d1fae5', color: '#065f46' } : {}}>
                     
-                    {/* Display files if they exist - Files first, then text */}
+                    {/* Display files if they exist - PDF at top-right, text below */}
                     {msg.files && msg.files.length > 0 && (
-                      <div className="mb-3">
-                        <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', maxWidth: '500px' }}>
+                      <div>
+                        {/* PDF files positioned at top-right */}
+                        <div className="flex justify-end mb-2">
                           {msg.files.map((file, index) => {
                             const ext = file.name.split('.').pop()?.toLowerCase();
                             if (ext === 'pdf') {
                               return (
-                                <div key={index} className="relative">
+                                <div key={index}>
                                   <a
                                     href={file.url}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="block w-20 h-14 border rounded overflow-hidden hover:opacity-80 transition-opacity cursor-pointer"
-                                    style={{ aspectRatio: '4/3' }}
+                                    className="inline-flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-red-700 hover:bg-red-100 transition-colors cursor-pointer text-sm"
+                                    title={`Open ${file.name}`}
                                   >
-                                    <iframe
-                                      src={file.url}
-                                      title={file.name}
-                                      className="w-full h-full text-xs pointer-events-none [&::-webkit-scrollbar]:hidden"
-                                      scrolling="no"
-                                      style={{ 
-                                        overflow: 'hidden',
-                                        border: 'none',
-                                        outline: 'none',
-                                        scrollbarWidth: 'none',
-                                        msOverflowStyle: 'none'
-                                      }}
-                                    />
+                                    <span className="text-red-500">📄</span>
+                                    <span className="max-w-[120px] truncate font-medium">
+                                      {file.name}
+                                    </span>
                                   </a>
-                                  <div className="text-xs text-gray-500 truncate mt-1 max-w-20" title={file.name}>
-                                    {file.name}
-                                  </div>
-                                </div>
-                              );
-                            } else if (["png", "jpg", "jpeg", "gif", "bmp", "webp"].includes(ext || '')) {
-                              return (
-                                <div key={index} className="relative">
-                                  <a
-                                    href={file.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="block w-20 h-14 border rounded overflow-hidden hover:opacity-80 transition-opacity cursor-pointer"
-                                    style={{ aspectRatio: '4/3' }}
-                                  >
-                                    <img
-                                      src={file.url}
-                                      alt={file.name}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  </a>
-                                  <div className="text-xs text-gray-500 truncate mt-1 max-w-20" title={file.name}>
-                                    {file.name}
-                                  </div>
-                                </div>
-                              );
-                            } else {
-                              return (
-                                <div key={index} className="relative">
-                                  <a
-                                    href={file.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="block w-20 h-14 bg-gray-100 border rounded flex items-center justify-center text-xl hover:bg-gray-200 transition-colors cursor-pointer"
-                                    style={{ aspectRatio: '4/3' }}
-                                  >
-                                    📄
-                                  </a>
-                                  <div className="text-xs text-gray-500 truncate mt-1 max-w-20" title={file.name}>
-                                    {file.name}
-                                  </div>
                                 </div>
                               );
                             }
+                            return null;
                           })}
                         </div>
+                        
+                        {/* Non-PDF files in grid layout */}
+                        {msg.files.some(file => {
+                          const ext = file.name.split('.').pop()?.toLowerCase();
+                          return ext !== 'pdf';
+                        }) && (
+                          <div className="grid gap-2 mb-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', maxWidth: '500px' }}>
+                            {msg.files.map((file, index) => {
+                              const ext = file.name.split('.').pop()?.toLowerCase();
+                              if (ext === 'pdf') return null;
+                              
+                              if (["png", "jpg", "jpeg", "gif", "bmp", "webp"].includes(ext || '')) {
+                                return (
+                                  <div key={index} className="relative">
+                                    <a
+                                      href={file.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="block w-20 h-14 border rounded overflow-hidden hover:opacity-80 transition-opacity cursor-pointer"
+                                      style={{ aspectRatio: '4/3' }}
+                                    >
+                                      <img
+                                        src={file.url}
+                                        alt={file.name}
+                                        className="w-full h-full object-cover"
+                                      />
+                                    </a>
+                                    <div className="text-xs text-gray-500 truncate mt-1 max-w-20" title={file.name}>
+                                      {file.name}
+                                    </div>
+                                  </div>
+                                );
+                              } else {
+                                return (
+                                  <div key={index} className="relative">
+                                    <a
+                                      href={file.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="block w-20 h-14 bg-gray-100 border rounded flex items-center justify-center text-xl hover:bg-gray-200 transition-colors cursor-pointer"
+                                      style={{ aspectRatio: '4/3' }}
+                                    >
+                                      📄
+                                    </a>
+                                    <div className="text-xs text-gray-500 truncate mt-1 max-w-20" title={file.name}>
+                                      {file.name}
+                                    </div>
+                                  </div>
+                                );
+                              }
+                            })}
+                          </div>
+                        )}
+                        
+                        {/* Text content below files */}
+                        {msg.text && (
+                          <div className="break-words text-base leading-relaxed word-wrap overflow-wrap-anywhere">
+                            {msg.text}
+                          </div>
+                        )}
                       </div>
                     )}
                     
-                    {/* Display text below files */}
-                    {msg.text && (
-                      <div>
+                    {/* Display text only if no files are present */}
+                    {msg.text && (!msg.files || msg.files.length === 0) && (
+                      <div className="break-words text-base leading-relaxed word-wrap overflow-wrap-anywhere">
                         {msg.text}
                       </div>
                     )}
@@ -498,21 +543,20 @@ const Index = () => {
                         const ext = msg.fileName?.split('.').pop()?.toLowerCase();
                         if (ext === 'pdf') {
                           return (
-                            <iframe
-                              src={msg.fileUrl}
-                              title={msg.fileName}
-                              className="w-full h-32 border rounded [&::-webkit-scrollbar]:hidden"
-                              style={{ 
-                                minWidth: '150px', 
-                                maxWidth: '300px', 
-                                overflow: 'hidden',
-                                border: 'none',
-                                outline: 'none',
-                                scrollbarWidth: 'none',
-                                msOverflowStyle: 'none'
-                              }}
-                              scrolling="no"
-                            />
+                            <div className="inline-block">
+                              <a
+                                href={msg.fileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-red-700 hover:bg-red-100 transition-colors cursor-pointer"
+                                title={`Open ${msg.fileName || 'PDF Document'}`}
+                              >
+                                <span className="text-red-500">📄</span>
+                                <span className="max-w-[150px] truncate font-medium">
+                                  {msg.fileName || 'PDF Document'}
+                                </span>
+                              </a>
+                            </div>
                           );
                         } else if (["png", "jpg", "jpeg", "gif", "bmp", "webp"].includes(ext || '')) {
                           return (

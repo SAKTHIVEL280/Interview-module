@@ -133,3 +133,15 @@ All colors MUST be HSL.
   scrollbar-width: thin;
   scrollbar-color: rgba(45, 62, 79, 0.4) rgba(229, 231, 235, 0.3);
 }
+
+/* Enhanced text wrapping for chat messages */
+.word-wrap {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+.overflow-wrap-anywhere {
+  overflow-wrap: anywhere;
+}
