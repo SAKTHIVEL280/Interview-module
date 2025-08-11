@@ -2,7 +2,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Mic, MicOff, Paperclip, Send } from 'lucide-react';
 import { useParams } from 'react-router-dom';
-import { ResizableBox } from 'react-resizable';
 import TopNavBar from '@/components/TopNavBar';
 import ProjectSummary from '@/components/ProjectSummary';
 
@@ -327,14 +326,9 @@ const Index = () => {
       {/* Main Content Area */}
       <div className="flex h-full overflow-hidden">
         {/* Left Panel - Context Timeline */}
-        <ResizableBox
-          width={leftPanelWidth}
-          height={Infinity}
-          axis="x"
-          minConstraints={[400, Infinity]} // Same as default size - cannot go smaller
-          maxConstraints={[window.innerWidth - Math.max(320, window.innerWidth * 0.25), Infinity]}
-          onResize={(e, data) => setLeftPanelWidth(data.size.width)}
-          handle={<div className="resizable-handle" />}
+        <div 
+          className="relative flex flex-col bg-white shadow-lg overflow-hidden"
+          style={{ width: `${leftPanelWidth}px`, minWidth: '400px', maxWidth: `${window.innerWidth - Math.max(320, window.innerWidth * 0.25)}px` }}
         >
           <div className="w-full h-full border-r-0 flex flex-col bg-white shadow-lg overflow-hidden">
             {/* Fixed Conversation Summary Card */}
@@ -389,7 +383,7 @@ const Index = () => {
                       </div>
                       
                       {/* Timestamp */}
-                      <div className={`text-xs text-gray-500 mt-1 ${
+                      <div className={`text-xs text-gray-500 mt-1 whitespace-nowrap ${
                         entry.type === 'bot' ? 'text-left' : 'text-right'
                       }`}>
                         {entry.timestamp} • {entry.date}
@@ -400,7 +394,39 @@ const Index = () => {
               </div>
             </div>
           </div>
-        </ResizableBox>
+          
+          {/* Custom Resize Handle */}
+          <div 
+            className="resizable-handle"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              const startX = e.clientX;
+              const startWidth = leftPanelWidth;
+              
+              // Add body class to prevent text selection
+              document.body.classList.add('resizing');
+              
+              const handleMouseMove = (e: MouseEvent) => {
+                const newWidth = startWidth + (e.clientX - startX);
+                const minWidth = 400;
+                const maxWidth = window.innerWidth - Math.max(320, window.innerWidth * 0.25);
+                
+                if (newWidth >= minWidth && newWidth <= maxWidth) {
+                  setLeftPanelWidth(newWidth);
+                }
+              };
+              
+              const handleMouseUp = () => {
+                document.removeEventListener('mousemove', handleMouseMove);
+                document.removeEventListener('mouseup', handleMouseUp);
+                document.body.classList.remove('resizing');
+              };
+              
+              document.addEventListener('mousemove', handleMouseMove);
+              document.addEventListener('mouseup', handleMouseUp);
+            }}
+          />
+        </div>
 
         {/* Right Panel - Chat Area */}
         <div className="flex-grow h-full flex flex-col bg-white shadow-lg min-w-0 overflow-hidden">
@@ -581,7 +607,7 @@ const Index = () => {
                       })()
                     )}
                   </div>
-                  <div className={`text-xs text-gray-500 mt-1 ${
+                  <div className={`text-xs text-gray-500 mt-1 whitespace-nowrap ${
                     msg.type === 'user' ? 'self-end' : 'self-start'
                   }`}>
                     {msg.timestamp} • {msg.date}

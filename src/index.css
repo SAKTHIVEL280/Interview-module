@@ -108,30 +108,35 @@ All colors MUST be HSL.
   background-color: #27425bff !important;
 }
 
-/* Custom scrollbar styles */
+/* Custom scrollbar styles - Updated Blue Theme */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
+  width: 16px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(229, 231, 235, 0.3);
-  border-radius: 10px;
+  background: transparent;
+  border-radius: 4px;
+  margin-right: 10px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(45, 62, 79, 0.4);
-  border-radius: 10px;
-  transition: background 0.3s ease;
+  background: rgba(39, 66, 91, 0.3);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+  border: 5px solid transparent;
+  background-clip: padding-box;
+  min-height: 30px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(45, 62, 79, 0.6);
+  background: rgba(39, 66, 91, 0.5);
+  background-clip: padding-box;
 }
 
 /* For Firefox */
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(45, 62, 79, 0.4) rgba(229, 231, 235, 0.3);
+  scrollbar-color: rgba(39, 66, 91, 0.3) transparent;
 }
 
 /* Enhanced text wrapping for chat messages */
@@ -146,22 +151,80 @@ All colors MUST be HSL.
   overflow-wrap: anywhere;
 }
 
-/* Resizable handle styles */
+/* Resizable handle styles - Clean and Simple */
 .resizable-handle {
   width: 4px;
-  background: transparent;
+  background: rgba(39, 66, 91, 0.1);
   cursor: col-resize;
   position: absolute;
-  right: 0;
+  right: -2px;
   top: 0;
   bottom: 0;
-  z-index: 10;
+  z-index: 999;
+  transition: all 0.15s ease;
+  user-select: none;
 }
 
 .resizable-handle:hover {
-  background-color: #27425bff !important;
+  background-color: rgba(39, 66, 91, 0.3);
+  width: 6px;
+  right: -3px;
 }
 
 .resizable-handle:active {
-  background-color: #27425bff !important;
+  background-color: #27425bff;
+  width: 6px;
+  right: -3px;
+}
+
+/* Prevent text selection during resize */
+body.resizing {
+  user-select: none !important;
+  cursor: col-resize !important;
+}
+
+body.resizing * {
+  user-select: none !important;
+  pointer-events: none !important;
+}
+
+/* Custom Scrollbar Styles - Blue Theme */
+::-webkit-scrollbar {
+  width: 16px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+  margin-right: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(39, 66, 91, 0.3);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+  border: 5px solid transparent;
+  background-clip: padding-box;
+  min-height: 30px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(39, 66, 91, 0.5);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: #27425bff;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(39, 66, 91, 0.3) transparent;
 }
