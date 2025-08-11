@@ -1,11 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, Paperclip, Send, ChevronDown } from 'lucide-react';
+import { Mic, MicOff, Paperclip, Send } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import { ResizableBox } from 'react-resizable';
 import TopNavBar from '@/components/TopNavBar';
 import ProjectSummary from '@/components/ProjectSummary';
-import '../resizable.css';
 
 interface TimelineEntry {
   id: number;

@@ -10,7 +10,6 @@ import mysql from 'mysql2/promise';
 const app = express();
 const PORT = 5000;
 
-// __dirname workaround for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -21,7 +20,7 @@ if (!fs.existsSync(uploadsDir)) {
   console.log('Created uploads directory');
 }
 
-// Allow CORS for local dev with specific configuration
+// CORS configuration
 app.use(cors({
   origin: ['http://localhost:8080', 'http://localhost:8081', 'http://localhost:3000'],
   credentials: true,
@@ -29,86 +28,66 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Add request logging middleware
+// Request logging middleware
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
   next();
 });
 
-// Database connection configuration with error handling
+// Database configuration
 const dbConfig = {
   host: 'localhost',
   user: 'root',
-  password: 'skyp',
+  password: 'root',
   database: 'certaintimaster',
   port: 3306
 };
 
-// Serve uploaded files statically
+// Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Multer setup
+// Multer configuration
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsDir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
+  destination: (req, file, cb) => cb(null, uploadsDir),
+  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
 });
 const upload = multer({ storage });
 
-// Project data endpoint with better error handling
+// Project data endpoint
 app.get('/api/project/:projectId', async (req, res) => {
   let connection;
   try {
     const projectId = req.params.projectId;
     console.log(`Fetching project data for ID: ${projectId}`);
     
-    // Create database connection with timeout
     connection = await mysql.createConnection(dbConfig);
     console.log('Database connection established');
     
-    // SQL query to fetch project data with company information
     const projectQuery = `
       SELECT 
-        p.projectId,
-        p.projectCode,
-        p.projectName,
-        c.companyIdentifier,
-        c.companyName,
-        c.billingCountry,
-        c.currency,
-        c.industry,
-        c.status
-      FROM 
-        projects p
-      INNER JOIN 
-        company c ON p.companyId = c.companyId
-      WHERE 
-        p.projectId = ?
+        p.projectId, p.projectCode, p.projectName,
+        c.companyIdentifier, c.companyName, c.billingCountry,
+        c.currency, c.industry, c.status
+      FROM projects p
+      INNER JOIN company c ON p.companyId = c.companyId
+      WHERE p.projectId = ?
     `;
 
-    // SQL query to fetch summary from master_project_ai_summary_sections
     const summaryQuery = `
       SELECT summary FROM master_project_ai_summary_sections WHERE projectid = ?
     `;
 
-    // Fetch project data
     console.log('Executing project query...');
     const [projectRows] = await connection.execute(projectQuery, [projectId]);
     console.log(`Project query returned ${projectRows.length} rows`);
     
-    // Fetch summary
     console.log('Executing summary query...');
     const [summaryRows] = await connection.execute(summaryQuery, [projectId]);
     console.log(`Summary query returned ${summaryRows.length} rows`);
 
     if (projectRows.length > 0) {
       const result = projectRows[0];
-      // Generate a random Project Ref Id like 'Y.LL2100234'
       const refId = 'Y.LL' + Math.floor(Math.random() * 10000000).toString().padStart(7, '0');
-      // Get summary (if exists)
       const summary = summaryRows.length > 0 ? summaryRows[0].summary : null;
       const projectData = {
         projectId: result.projectId,
@@ -134,13 +113,10 @@ app.get('/api/project/:projectId', async (req, res) => {
         errorCode: 'PROJECT_NOT_FOUND'
       });
     }
-    
   } catch (error) {
     console.error('Error fetching project data:', error);
     
-    // Check if it's a database connection error
     if (error.code === 'ECONNREFUSED' || error.code === 'ER_ACCESS_DENIED_ERROR') {
-      // Return mock data when database is not available
       console.log('Database not available, returning mock data');
       const mockData = {
         projectId: req.params.projectId,
@@ -157,7 +133,6 @@ app.get('/api/project/:projectId', async (req, res) => {
       };
       res.json({ success: true, data: mockData });
     } else {
-      // Provide user-friendly error messages
       let errorMessage = 'Database error occurred';
       let statusCode = 500;
       
@@ -190,7 +165,7 @@ app.get('/api/project/:projectId', async (req, res) => {
   }
 });
 
-// Upload endpoint with better error handling
+// Upload endpoint
 app.post('/api/upload', upload.single('file'), (req, res) => {
   console.log('File upload request received');
   if (!req.file) {
@@ -212,7 +187,7 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Root endpoint for testing
+// Root endpoint
 app.get('/', (req, res) => {
   res.json({ 
     message: 'Server is running', 

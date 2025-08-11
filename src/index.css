@@ -145,3 +145,23 @@ All colors MUST be HSL.
 .overflow-wrap-anywhere {
   overflow-wrap: anywhere;
 }
+
+/* Resizable handle styles */
+.resizable-handle {
+  width: 4px;
+  background: transparent;
+  cursor: col-resize;
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 10;
+}
+
+.resizable-handle:hover {
+  background-color: #27425bff !important;
+}
+
+.resizable-handle:active {
+  background-color: #27425bff !important;
+}
