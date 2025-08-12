@@ -138,7 +138,11 @@ app.get('/api/project/:projectId', async (req, res) => {
           },
           stats: {
             sectionsCount: Object.keys(sectionSummaryDict).length,
-            interactionsCount: interactions.length
+            interactionsCount: interactions.length,
+            usedFillerContent: {
+              summary: Object.keys(sectionSummaryDict).length === 0,
+              questions: interactions.length === 0
+            }
           }
         };
       } catch (jsonError) {
@@ -360,26 +364,44 @@ async function getProjectInteractions(connection, projectId) {
 
 // Helper function to save section summaries to JSON file
 function saveSectionSummaries(sectionSummaryDict, projectId) {
-  if (Object.keys(sectionSummaryDict).length > 0) {
-    const filePath = path.join(__dirname, `summary.json`);
-    fs.writeFileSync(filePath, JSON.stringify(sectionSummaryDict, null, 4), 'utf-8');
-    console.log(`Section summaries saved to summary.json`);
-    return filePath;
-  } else {
-    console.log("No section summaries to save");
-    return null;
+  let dataToSave = sectionSummaryDict;
+  
+  // If no data found, use filler content
+  if (Object.keys(sectionSummaryDict).length === 0) {
+    console.log(`No section summaries found for project ${projectId}, using filler content`);
+    dataToSave = {
+      "Core Challenge or Problem Statement": `No summary available for project ${projectId}. This project may not have completed the analysis phase or the data has not been processed yet.`,
+      "Feature Development or Enhancement": `No feature development summary available for project ${projectId}. Please check back later or contact the project team for more information.`,
+      "Technologies and Tools": `No technology summary available for project ${projectId}. The project details are currently being processed.`,
+      "Skills Resources and Team Composition": `No team composition summary available for project ${projectId}. Team information is currently being compiled.`,
+      "Experimental Methodology: Testing and Iteration": `No testing methodology summary available for project ${projectId}. Testing details are being documented.`,
+      "Market Research and Competitive Analysis": `No market research summary available for project ${projectId}. Analysis is currently in progress.`,
+      "Collaborations and Dissemination": `No collaboration summary available for project ${projectId}. Partnership details are being updated.`,
+      "Comprehensive Project Summary": `No comprehensive summary available for project ${projectId}. This project may be in early stages or data is still being processed. Please contact the project administrator for more details.`,
+      "R&D Commentary and Strategic Insights": `No R&D commentary available for project ${projectId}. Strategic insights are currently being developed for this project.`
+    };
   }
+  
+  const filePath = path.join(__dirname, `summary.json`);
+  fs.writeFileSync(filePath, JSON.stringify(dataToSave, null, 4), 'utf-8');
+  console.log(`Section summaries saved to summary.json`);
+  return filePath;
 }
 
 // Helper function to save interactions to JSON file
 function saveInteractionsJson(interactions, projectId) {
+  let dataToSave = interactions;
+  
+  // If no interactions found, use filler content
   if (interactions.length === 0) {
-    console.log("No interactions to save.");
-    return null;
+    console.log(`No interactions found for project ${projectId}, using filler content`);
+    dataToSave = [
+      `No questions available for project ${projectId}. This project may not have completed the interview preparation phase or the questions have not been generated yet. Please check back later or contact the project team for more information.`
+    ];
   }
   
   // Format for the JSON file
-  const interactionsDict = { [projectId]: interactions };
+  const interactionsDict = { [projectId]: dataToSave };
   
   const filePath = path.join(__dirname, `question.json`);
   
@@ -387,12 +409,12 @@ function saveInteractionsJson(interactions, projectId) {
   let jsonContent = "{\n";
   jsonContent += `    "${projectId}": [\n`;
   
-  interactions.forEach((interaction, index) => {
+  dataToSave.forEach((interaction, index) => {
     // Escape any double quotes in the interaction
     const escapedInteraction = interaction.replace(/"/g, '\\"');
     
     // Add comma if not the last item
-    if (index < interactions.length - 1) {
+    if (index < dataToSave.length - 1) {
       jsonContent += `        "${escapedInteraction}",\n`;
     } else {
       jsonContent += `        "${escapedInteraction}"\n`;
@@ -446,7 +468,11 @@ app.get('/generate/:projectId', async (req, res) => {
       },
       stats: {
         sectionsCount: Object.keys(sectionSummaryDict).length,
-        interactionsCount: interactions.length
+        interactionsCount: interactions.length,
+        usedFillerContent: {
+          summary: Object.keys(sectionSummaryDict).length === 0,
+          questions: interactions.length === 0
+        }
       },
       downloadUrls: {
         sectionSummaries: summaryFilePath ? `http://localhost:${PORT}/json/summary.json` : null,
@@ -564,7 +590,11 @@ app.get('/:projectId', async (req, res) => {
       },
       stats: {
         sectionsCount: Object.keys(sectionSummaryDict).length,
-        interactionsCount: interactions.length
+        interactionsCount: interactions.length,
+        usedFillerContent: {
+          summary: Object.keys(sectionSummaryDict).length === 0,
+          questions: interactions.length === 0
+        }
       },
       downloadUrls: {
         sectionSummaries: summaryFilePath ? `http://localhost:${PORT}/json/project_${projectId}_section_summaries.json` : null,
