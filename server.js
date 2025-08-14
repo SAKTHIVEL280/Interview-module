@@ -138,7 +138,11 @@ app.get('/api/project/:projectId', async (req, res) => {
           },
           stats: {
             sectionsCount: Object.keys(sectionSummaryDict).length,
-            interactionsCount: interactions.length
+            interactionsCount: interactions.length,
+            usedFillerContent: {
+              summary: Object.keys(sectionSummaryDict).length === 0,
+              questions: interactions.length === 0
+            }
           }
         };
       } catch (jsonError) {
@@ -390,6 +394,7 @@ function saveInteractionsJson(interactions, projectId) {
   
   // Format for the JSON file
   const interactionsDict = { [projectId]: dataToSave };
+  const interactionsDict = { [projectId]: dataToSave };
   
   const filePath = path.join(__dirname, `question.json`);
   
@@ -398,10 +403,12 @@ function saveInteractionsJson(interactions, projectId) {
   jsonContent += `    "${projectId}": [\n`;
   
   dataToSave.forEach((interaction, index) => {
+  dataToSave.forEach((interaction, index) => {
     // Escape any double quotes in the interaction
     const escapedInteraction = interaction.replace(/"/g, '\\"');
     
     // Add comma if not the last item
+    if (index < dataToSave.length - 1) {
     if (index < dataToSave.length - 1) {
       jsonContent += `        "${escapedInteraction}",\n`;
     } else {
@@ -456,7 +463,11 @@ app.get('/generate/:projectId', async (req, res) => {
       },
       stats: {
         sectionsCount: Object.keys(sectionSummaryDict).length,
-        interactionsCount: interactions.length
+        interactionsCount: interactions.length,
+        usedFillerContent: {
+          summary: Object.keys(sectionSummaryDict).length === 0,
+          questions: interactions.length === 0
+        }
       },
       downloadUrls: {
         sectionSummaries: summaryFilePath ? `http://localhost:${PORT}/json/summary.json` : null,
@@ -574,7 +585,11 @@ app.get('/:projectId', async (req, res) => {
       },
       stats: {
         sectionsCount: Object.keys(sectionSummaryDict).length,
-        interactionsCount: interactions.length
+        interactionsCount: interactions.length,
+        usedFillerContent: {
+          summary: Object.keys(sectionSummaryDict).length === 0,
+          questions: interactions.length === 0
+        }
       },
       downloadUrls: {
         sectionSummaries: summaryFilePath ? `http://localhost:${PORT}/json/project_${projectId}_section_summaries.json` : null,
