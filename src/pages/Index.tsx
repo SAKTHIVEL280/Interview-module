@@ -304,19 +304,20 @@ const Index = () => {
     const handleResize = () => {
       const minRightPanelWidth = Math.max(320, window.innerWidth * 0.25); // At least 25% of screen or 320px
       const maxLeftWidth = window.innerWidth - minRightPanelWidth;
-      
-      // Ensure left panel is never smaller than default size and never larger than max allowed
-      if (leftPanelWidth > maxLeftWidth) {
-        setLeftPanelWidth(maxLeftWidth);
-      } else if (leftPanelWidth < DEFAULT_LEFT_WIDTH) {
-        setLeftPanelWidth(DEFAULT_LEFT_WIDTH);
-      }
+      setLeftPanelWidth(prevWidth => {
+        if (prevWidth > maxLeftWidth) {
+          return maxLeftWidth;
+        } else if (prevWidth < DEFAULT_LEFT_WIDTH) {
+          return DEFAULT_LEFT_WIDTH;
+        }
+        return prevWidth;
+      });
     };
 
     handleResize(); // Call on mount
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [leftPanelWidth]);
+  }, []);
 
   return (
     <div className="h-screen flex flex-col overflow-hidden" style={{ backgroundColor: 'rgba(220,232,255,255)' }}>

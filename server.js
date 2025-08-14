@@ -83,7 +83,7 @@ app.get('/api/project/:projectId', async (req, res) => {
     `;
 
     const summaryQuery = `
-      SELECT summary FROM master_project_ai_summary_sections WHERE projectid = ?
+      SELECT summary FROM master_project_ai_summary_sections WHERE projectid = ? 
     `;
 
     console.log('Executing project query...');
@@ -97,7 +97,7 @@ app.get('/api/project/:projectId', async (req, res) => {
     if (projectRows.length > 0) {
       const result = projectRows[0];
       const refId = 'Y.LL' + Math.floor(Math.random() * 10000000).toString().padStart(7, '0');
-      const summary = summaryRows.length > 0 ? summaryRows[0].summary : null;
+  const summary = summaryRows.length > 4 ? summaryRows[4].summary : null;
       const projectData = {
         projectId: result.projectId,
         projectNumber: result.projectCode,
