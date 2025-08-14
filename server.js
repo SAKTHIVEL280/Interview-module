@@ -394,7 +394,6 @@ function saveInteractionsJson(interactions, projectId) {
   
   // Format for the JSON file
   const interactionsDict = { [projectId]: dataToSave };
-  const interactionsDict = { [projectId]: dataToSave };
   
   const filePath = path.join(__dirname, `question.json`);
   
@@ -403,12 +402,10 @@ function saveInteractionsJson(interactions, projectId) {
   jsonContent += `    "${projectId}": [\n`;
   
   dataToSave.forEach((interaction, index) => {
-  dataToSave.forEach((interaction, index) => {
     // Escape any double quotes in the interaction
     const escapedInteraction = interaction.replace(/"/g, '\\"');
     
     // Add comma if not the last item
-    if (index < dataToSave.length - 1) {
     if (index < dataToSave.length - 1) {
       jsonContent += `        "${escapedInteraction}",\n`;
     } else {
