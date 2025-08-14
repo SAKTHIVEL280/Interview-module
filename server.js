@@ -360,26 +360,36 @@ async function getProjectInteractions(connection, projectId) {
 
 // Helper function to save section summaries to JSON file
 function saveSectionSummaries(sectionSummaryDict, projectId) {
-  if (Object.keys(sectionSummaryDict).length > 0) {
-    const filePath = path.join(__dirname, `summary.json`);
-    fs.writeFileSync(filePath, JSON.stringify(sectionSummaryDict, null, 4), 'utf-8');
-    console.log(`Section summaries saved to summary.json`);
-    return filePath;
-  } else {
-    console.log("No section summaries to save");
-    return null;
+  let dataToSave = sectionSummaryDict;
+  
+  // If no data found, use simple message
+  if (Object.keys(sectionSummaryDict).length === 0) {
+    console.log(`No section summaries found for project ${projectId}, using no summary message`);
+    dataToSave = {
+      "Project Summary": `No summary available for project ${projectId}.`
+    };
   }
+  
+  const filePath = path.join(__dirname, `summary.json`);
+  fs.writeFileSync(filePath, JSON.stringify(dataToSave, null, 4), 'utf-8');
+  console.log(`Section summaries saved to summary.json`);
+  return filePath;
 }
 
 // Helper function to save interactions to JSON file
 function saveInteractionsJson(interactions, projectId) {
+  let dataToSave = interactions;
+  
+  // If no interactions found, use simple message
   if (interactions.length === 0) {
-    console.log("No interactions to save.");
-    return null;
+    console.log(`No interactions found for project ${projectId}, using no questions message`);
+    dataToSave = [
+      `No questions available for project ${projectId}.`
+    ];
   }
   
   // Format for the JSON file
-  const interactionsDict = { [projectId]: interactions };
+  const interactionsDict = { [projectId]: dataToSave };
   
   const filePath = path.join(__dirname, `question.json`);
   
@@ -387,12 +397,12 @@ function saveInteractionsJson(interactions, projectId) {
   let jsonContent = "{\n";
   jsonContent += `    "${projectId}": [\n`;
   
-  interactions.forEach((interaction, index) => {
+  dataToSave.forEach((interaction, index) => {
     // Escape any double quotes in the interaction
     const escapedInteraction = interaction.replace(/"/g, '\\"');
     
     // Add comma if not the last item
-    if (index < interactions.length - 1) {
+    if (index < dataToSave.length - 1) {
       jsonContent += `        "${escapedInteraction}",\n`;
     } else {
       jsonContent += `        "${escapedInteraction}"\n`;
