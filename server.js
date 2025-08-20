@@ -55,6 +55,15 @@ app.use('/json', express.static(__dirname, {
   }
 }));
 
+// Serve generated text files
+app.use('/text', express.static(__dirname, {
+  setHeaders: (res, path) => {
+    if (path.endsWith('.txt')) {
+      res.setHeader('Content-Type', 'text/plain');
+    }
+  }
+}));
+
 // Multer configuration
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadsDir),
@@ -113,8 +122,8 @@ app.get('/api/project/:projectId', async (req, res) => {
       };
       console.log('Successfully fetched project data:', projectData);
 
-      // ✨ NEW: Generate JSON files automatically when project data is fetched
-      console.log('🔄 Auto-generating JSON files...');
+      // ✨ NEW: Generate text files automatically when project data is fetched
+      console.log('🔄 Auto-generating text files...');
       try {
         // Step 1: Get and save section summaries
         console.log('[1/2] Fetching section summaries...');
@@ -124,17 +133,17 @@ app.get('/api/project/:projectId', async (req, res) => {
         // Step 2: Get and save interactions
         console.log('[2/2] Fetching interactions...');
         const interactions = await getProjectInteractions(connection, projectId);
-        const interactionsFilePath = saveInteractionsJson(interactions, projectId);
+        const interactionsFilePath = saveInteractionsText(interactions, projectId);
         
-        console.log('✅ JSON files auto-generated successfully!');
+        console.log('✅ Text files auto-generated successfully!');
         
         // Add JSON file information to the response
         projectData.jsonFiles = {
-          sectionSummaries: summaryFilePath ? `summary.json` : null,
-          interactions: interactionsFilePath ? `question.json` : null,
+          sectionSummaries: summaryFilePath ? `summary.txt` : null,
+          interactions: interactionsFilePath ? `question.txt` : null,
           downloadUrls: {
-            sectionSummaries: summaryFilePath ? `http://localhost:${PORT}/json/summary.json` : null,
-            interactions: interactionsFilePath ? `http://localhost:${PORT}/json/question.json` : null
+            sectionSummaries: summaryFilePath ? `http://localhost:${PORT}/text/summary.txt` : null,
+            interactions: interactionsFilePath ? `http://localhost:${PORT}/text/question.txt` : null
           },
           stats: {
             sectionsCount: Object.keys(sectionSummaryDict).length,
@@ -362,65 +371,53 @@ async function getProjectInteractions(connection, projectId) {
   }
 }
 
-// Helper function to save section summaries to JSON file
+// Helper function to save section summaries to text file
 function saveSectionSummaries(sectionSummaryDict, projectId) {
-  let dataToSave = sectionSummaryDict;
+  let textContent = '';
   
   // If no data found, use simple message
   if (Object.keys(sectionSummaryDict).length === 0) {
     console.log(`No section summaries found for project ${projectId}, using no summary message`);
-    dataToSave = {
-      "Project Summary": `No summary available for project ${projectId}.`
-    };
+    textContent = `No summary available for project ${projectId}.`;
+  } else {
+    // Convert the dictionary to formatted text
+    for (const [section, summary] of Object.entries(sectionSummaryDict)) {
+      textContent += `${section}:\n${summary}\n\n`;
+    }
+    // Remove trailing newlines
+    textContent = textContent.trim();
   }
   
-  const filePath = path.join(__dirname, `summary.json`);
-  fs.writeFileSync(filePath, JSON.stringify(dataToSave, null, 4), 'utf-8');
-  console.log(`Section summaries saved to summary.json`);
+  const filePath = path.join(__dirname, `summary.txt`);
+  fs.writeFileSync(filePath, textContent, 'utf-8');
+  console.log(`Section summaries saved to summary.txt`);
   return filePath;
 }
 
-// Helper function to save interactions to JSON file
-function saveInteractionsJson(interactions, projectId) {
-  let dataToSave = interactions;
+// Helper function to save interactions to text file
+function saveInteractionsText(interactions, projectId) {
+  let textContent = '';
   
   // If no interactions found, use simple message
   if (interactions.length === 0) {
     console.log(`No interactions found for project ${projectId}, using no questions message`);
-    dataToSave = [
-      `No questions available for project ${projectId}.`
-    ];
+    textContent = `No questions available for project ${projectId}.`;
+  } else {
+    // Convert interactions array to numbered text format
+    interactions.forEach((interaction, index) => {
+      textContent += `${index + 1}. ${interaction}\n\n`;
+    });
+    // Remove trailing newlines
+    textContent = textContent.trim();
   }
   
-  // Format for the JSON file
-  const interactionsDict = { [projectId]: dataToSave };
-  
-  const filePath = path.join(__dirname, `question.json`);
-  
-  // Custom formatting to ensure each item is on a new line
-  let jsonContent = "{\n";
-  jsonContent += `    "${projectId}": [\n`;
-  
-  dataToSave.forEach((interaction, index) => {
-    // Escape any double quotes in the interaction
-    const escapedInteraction = interaction.replace(/"/g, '\\"');
-    
-    // Add comma if not the last item
-    if (index < dataToSave.length - 1) {
-      jsonContent += `        "${escapedInteraction}",\n`;
-    } else {
-      jsonContent += `        "${escapedInteraction}"\n`;
-    }
-  });
-  
-  jsonContent += "    ]\n}";
-  
-  fs.writeFileSync(filePath, jsonContent, 'utf-8');
-  console.log(`Interactions saved to question.json`);
+  const filePath = path.join(__dirname, `question.txt`);
+  fs.writeFileSync(filePath, textContent, 'utf-8');
+  console.log(`Interactions saved to question.txt`);
   return filePath;
 }
 
-// New route to generate JSON files for a project ID
+// New route to generate text files for a project ID
 app.get('/generate/:projectId', async (req, res) => {
   let connection;
   try {
@@ -435,10 +432,10 @@ app.get('/generate/:projectId', async (req, res) => {
       });
     }
     
-    console.log(`Generating JSON files for project ID: ${projectId}`);
+    console.log(`Generating text files for project ID: ${projectId}`);
     
     connection = await mysql.createConnection(dbConfig);
-    console.log('Database connection established for JSON generation');
+    console.log('Database connection established for text file generation');
     
     // Step 1: Get and save section summaries
     console.log('[1/2] Fetching section summaries...');
@@ -448,15 +445,15 @@ app.get('/generate/:projectId', async (req, res) => {
     // Step 2: Get and save interactions
     console.log('[2/2] Fetching interactions...');
     const interactions = await getProjectInteractions(connection, projectId);
-    const interactionsFilePath = saveInteractionsJson(interactions, projectId);
+    const interactionsFilePath = saveInteractionsText(interactions, projectId);
     
     const response = {
       success: true,
       projectId: projectId,
-      message: 'JSON files generated successfully',
+      message: 'Text files generated successfully',
       files: {
-        sectionSummaries: summaryFilePath ? `summary.json` : null,
-        interactions: interactionsFilePath ? `question.json` : null
+        sectionSummaries: summaryFilePath ? `summary.txt` : null,
+        interactions: interactionsFilePath ? `question.txt` : null
       },
       stats: {
         sectionsCount: Object.keys(sectionSummaryDict).length,
@@ -467,16 +464,16 @@ app.get('/generate/:projectId', async (req, res) => {
         }
       },
       downloadUrls: {
-        sectionSummaries: summaryFilePath ? `http://localhost:${PORT}/json/summary.json` : null,
-        interactions: interactionsFilePath ? `http://localhost:${PORT}/json/question.json` : null
+        sectionSummaries: summaryFilePath ? `http://localhost:${PORT}/text/summary.txt` : null,
+        interactions: interactionsFilePath ? `http://localhost:${PORT}/text/question.txt` : null
       }
     };
     
-    console.log('JSON files generation complete!');
+    console.log('Text files generation complete!');
     res.json(response);
     
   } catch (error) {
-    console.error('Error generating JSON files:', error);
+    console.error('Error generating text files:', error);
     
     if (error.code === 'ECONNREFUSED' || error.code === 'ER_ACCESS_DENIED_ERROR') {
       res.status(503).json({
@@ -486,7 +483,7 @@ app.get('/generate/:projectId', async (req, res) => {
         errorCode: 'DATABASE_UNAVAILABLE'
       });
     } else {
-      let errorMessage = 'Server error occurred while generating JSON files';
+      let errorMessage = 'Server error occurred while generating text files';
       let statusCode = 500;
       
       if (error.code === 'ER_NO_SUCH_TABLE') {
@@ -519,6 +516,95 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Chat API bridge endpoints
+app.post('/api/chat/start', async (req, res) => {
+  try {
+    const { projectId } = req.body;
+    const response = await fetch('http://localhost:5001/api/chat/start', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ projectId })
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('Chat service error:', error);
+    res.status(503).json({ 
+      success: false, 
+      error: 'Chat service unavailable',
+      message: 'The chat service is not responding. Please ensure Python server is running on port 5001.'
+    });
+  }
+});
+
+app.get('/api/chat/next-question', async (req, res) => {
+  try {
+    const response = await fetch('http://localhost:5001/api/chat/next-question');
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('Chat service error:', error);
+    res.status(503).json({ 
+      success: false, 
+      error: 'Chat service unavailable',
+      message: 'Please ensure Python chat server is running on port 5001.'
+    });
+  }
+});
+
+app.post('/api/chat/submit-answer', async (req, res) => {
+  try {
+    const response = await fetch('http://localhost:5001/api/chat/submit-answer', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(req.body)
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('Chat service error:', error);
+    res.status(503).json({ 
+      success: false, 
+      error: 'Chat service unavailable',
+      message: 'Please ensure Python chat server is running on port 5001.'
+    });
+  }
+});
+
+app.get('/api/chat/complete', async (req, res) => {
+  try {
+    const response = await fetch('http://localhost:5001/api/chat/complete');
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('Chat service error:', error);
+    res.status(503).json({ 
+      success: false, 
+      error: 'Chat service unavailable',
+      message: 'Please ensure Python chat server is running on port 5001.'
+    });
+  }
+});
+
+app.get('/api/chat/health', async (req, res) => {
+  try {
+    const response = await fetch('http://localhost:5001/health');
+    const data = await response.json();
+    res.json({ ...data, ready: true });
+  } catch (error) {
+    res.status(503).json({ 
+      status: 'UNAVAILABLE', 
+      error: 'Python chat server not responding on port 5001',
+      ready: false,
+      message: 'Please start the Python chat server with: python chat-server.py'
+    });
+  }
+});
+
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({ 
@@ -527,8 +613,8 @@ app.get('/', (req, res) => {
       'GET /api/health',
       'GET /api/project/:projectId',
       'POST /api/upload',
-      'GET /generate/:projectId - Generate JSON files for project',
-      'GET /:projectId - Direct access to generate JSON files (numeric IDs only)'
+      'GET /generate/:projectId - Generate text files for project',
+      'GET /:projectId - Direct access to generate text files (numeric IDs only)'
     ]
   });
 });
@@ -557,10 +643,10 @@ app.get('/:projectId', async (req, res) => {
       });
     }
     
-    console.log(`Generating JSON files for project ID: ${projectId}`);
+    console.log(`Generating text files for project ID: ${projectId}`);
     
     connection = await mysql.createConnection(dbConfig);
-    console.log('Database connection established for JSON generation');
+    console.log('Database connection established for text file generation');
     
     // Step 1: Get and save section summaries
     console.log('[1/2] Fetching section summaries...');
@@ -570,15 +656,15 @@ app.get('/:projectId', async (req, res) => {
     // Step 2: Get and save interactions
     console.log('[2/2] Fetching interactions...');
     const interactions = await getProjectInteractions(connection, projectId);
-    const interactionsFilePath = saveInteractionsJson(interactions, projectId);
+    const interactionsFilePath = saveInteractionsText(interactions, projectId);
     
     const response = {
       success: true,
       projectId: projectId,
-      message: 'JSON files generated successfully',
+      message: 'Text files generated successfully',
       files: {
-        sectionSummaries: summaryFilePath ? `project_${projectId}_section_summaries.json` : null,
-        interactions: interactionsFilePath ? `project_${projectId}_interactions.json` : null
+        sectionSummaries: summaryFilePath ? `summary.txt` : null,
+        interactions: interactionsFilePath ? `question.txt` : null
       },
       stats: {
         sectionsCount: Object.keys(sectionSummaryDict).length,
@@ -589,12 +675,12 @@ app.get('/:projectId', async (req, res) => {
         }
       },
       downloadUrls: {
-        sectionSummaries: summaryFilePath ? `http://localhost:${PORT}/json/project_${projectId}_section_summaries.json` : null,
-        interactions: interactionsFilePath ? `http://localhost:${PORT}/json/project_${projectId}_interactions.json` : null
+        sectionSummaries: summaryFilePath ? `http://localhost:${PORT}/text/summary.txt` : null,
+        interactions: interactionsFilePath ? `http://localhost:${PORT}/text/question.txt` : null
       }
     };
     
-    console.log('JSON files generation complete!');
+    console.log('Text files generation complete!');
     res.json(response);
     
   } catch (error) {

@@ -4,6 +4,7 @@ import { Mic, MicOff, Paperclip, Send } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import TopNavBar from '@/components/TopNavBar';
 import ProjectSummary from '@/components/ProjectSummary';
+import { useProjectData } from '@/hooks/use-project-data';
 
 interface TimelineEntry {
   id: number;
@@ -31,28 +32,30 @@ const Index = () => {
   // Use project ID from URL, fallback to default if none provided
   const PROJECT_ID = projectId || "3000609";
   
+  // Load project data to ensure it's available before starting chat
+  const { projectData, isLoading, error } = useProjectData(PROJECT_ID);
+  
   const [message, setMessage] = useState('');
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([{
-    id: 0,
-    type: 'bot',
-    text: "Hello! I'm your AI assistant. How can I help you today?",
-    timestamp: (() => {
-      const now = new Date();
-      const hours = now.getHours() % 12 || 12;
-      const minutes = now.getMinutes().toString().padStart(2, '0');
-      const ampm = now.getHours() >= 12 ? 'PM' : 'AM';
-      return `${hours}:${minutes} ${ampm}`;
-    })(),
-    date: (() => {
-      const now = new Date();
-      return now.toISOString().split('T')[0];
-    })(),
-  }]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[]>([]);
   const [messageCounter, setMessageCounter] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [leftPanelWidth, setLeftPanelWidth] = useState(400); // Default fixed size
+  
+  // Q-Bot specific state
+  const [chatSession, setChatSession] = useState({
+    isActive: false,
+    isStarted: false,
+    currentQuestion: null as string | null,
+    questionNumber: 0,
+    totalQuestions: 0,
+    progress: 0,
+    isRetry: false,
+    completed: false,
+    isLoading: false
+  });
+  
   const recognitionRef = useRef<any>(null);
 
   const chatMessagesRef = useRef<HTMLDivElement>(null);
@@ -78,17 +81,315 @@ const Index = () => {
     }
   };
 
-  const handleSend = async () => {
-    // Check if there's either a message or pending files
-    if (!message.trim() && pendingFiles.length === 0) return;
+  // Q-Bot Integration Functions
+  const startChatSession = async () => {
+    console.log('Starting chat session with PROJECT_ID:', PROJECT_ID);
+    setChatSession(prev => ({ ...prev, isLoading: true }));
+    
+    try {
+      console.log('Sending request to /api/chat/start...');
+      const response = await fetch('http://localhost:5000/api/chat/start', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ projectId: PROJECT_ID })
+      });
+      
+      console.log('Response status:', response.status);
+      const data = await response.json();
+      console.log('Response data:', data);
+      
+      if (data.success) {
+        setChatSession(prev => ({
+          ...prev,
+          isActive: true,
+          isStarted: true,
+          totalQuestions: data.total_questions,
+          isLoading: false
+        }));
+        
+        // Add welcome message (but don't add to timeline)
+        const welcomeMessage: ChatMessage = {
+          id: Date.now(),
+          type: 'bot',
+          text: `Hello!`,
+          timestamp: getCurrentTime(),
+          date: getCurrentDate()
+        };
+        
+        setChatMessages([welcomeMessage]);
+        // Don't add welcome message to timeline - keep timeline empty initially
+        setTimelineEntries([]);
+        
+        // Get first question
+        await getNextQuestion();
+      } else {
+        setChatSession(prev => ({ ...prev, isLoading: false }));
+        console.error('Failed to start chat session:', data.error);
+        
+        // Add error message to chat
+        const errorMessage: ChatMessage = {
+          id: Date.now(),
+          type: 'bot',
+          text: `Sorry, there was an error starting the interview: ${data.error || 'Unknown error'}. Please refresh the page to try again.`,
+          timestamp: getCurrentTime(),
+          date: getCurrentDate()
+        };
+        setChatMessages([errorMessage]);
+      }
+    } catch (error) {
+      setChatSession(prev => ({ ...prev, isLoading: false }));
+      console.error('Error starting chat session:', error);
+      
+      // Add error message to chat
+      const errorMessage: ChatMessage = {
+        id: Date.now(),
+        type: 'bot',
+        text: `Sorry, there was a connection error. Please make sure all servers are running and refresh the page to try again.`,
+        timestamp: getCurrentTime(),
+        date: getCurrentDate()
+      };
+      setChatMessages([errorMessage]);
+    }
+  };
 
-    // If mic is recording, turn it off first
+  const getNextQuestion = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/chat/next-question');
+      const data = await response.json();
+      
+      if (data.success) {
+        if (data.completed) {
+          await completeChat();
+          return;
+        }
+        
+        setChatSession(prev => ({
+          ...prev,
+          currentQuestion: data.question,
+          questionNumber: data.question_number,
+          progress: data.progress,
+          isRetry: data.is_retry,
+          completed: false
+        }));
+        
+        // Rephrase question differently if it's a retry
+        let questionText = data.question;
+        if (data.is_retry) {
+          // Create truly different question variations that mean the same thing
+          const questionLower = data.question.toLowerCase();
+          let rephrasedQuestion = data.question;
+          
+          // Different patterns for different question types
+          if (questionLower.includes('what') && questionLower.includes('food')) {
+            const foodVariations = [
+              "Which dish or cuisine does Naveen prefer?",
+              "Can you tell me about Naveen's food preferences?",
+              "What type of cuisine or dish is Naveen's favorite?",
+              "Which food items does Naveen enjoy the most?",
+              "What does Naveen like to eat?"
+            ];
+            rephrasedQuestion = foodVariations[Math.floor(Math.random() * foodVariations.length)];
+          } else if (questionLower.includes('what') && questionLower.includes('team')) {
+            const teamVariations = [
+              "Which cricket team does Naveen support?",
+              "Can you name Naveen's preferred cricket team?",
+              "Which team does Naveen cheer for in cricket?",
+              "What cricket team is Naveen a fan of?",
+              "Which cricket club does Naveen follow?"
+            ];
+            rephrasedQuestion = teamVariations[Math.floor(Math.random() * teamVariations.length)];
+          } else if (questionLower.includes('what') && questionLower.includes('number')) {
+            const numberVariations = [
+              "Which number holds special meaning for Naveen?",
+              "Can you tell me Naveen's lucky or favorite number?",
+              "What number does Naveen prefer or find significant?",
+              "Which digit or number is most important to Naveen?",
+              "What's the number that Naveen likes best?"
+            ];
+            rephrasedQuestion = numberVariations[Math.floor(Math.random() * numberVariations.length)];
+          } else if (questionLower.includes('how')) {
+            const howVariations = [
+              questionText.replace(/^How/, "In what way"),
+              questionText.replace(/^How/, "Can you explain how"),
+              questionText.replace(/^How/, "What's the method for"),
+              questionText.replace(/^How/, "Could you describe how")
+            ];
+            rephrasedQuestion = howVariations[Math.floor(Math.random() * howVariations.length)];
+          } else if (questionLower.includes('why')) {
+            const whyVariations = [
+              questionText.replace(/^Why/, "What's the reason"),
+              questionText.replace(/^Why/, "Can you explain why"),
+              questionText.replace(/^Why/, "What causes"),
+              questionText.replace(/^Why/, "For what purpose")
+            ];
+            rephrasedQuestion = whyVariations[Math.floor(Math.random() * whyVariations.length)];
+          } else if (questionLower.includes('when')) {
+            const whenVariations = [
+              questionText.replace(/^When/, "At what time"),
+              questionText.replace(/^When/, "During which period"),
+              questionText.replace(/^When/, "Can you specify when"),
+              questionText.replace(/^When/, "What's the timing for")
+            ];
+            rephrasedQuestion = whenVariations[Math.floor(Math.random() * whenVariations.length)];
+          } else if (questionLower.includes('where')) {
+            const whereVariations = [
+              questionText.replace(/^Where/, "In which location"),
+              questionText.replace(/^Where/, "Can you specify where"),
+              questionText.replace(/^Where/, "At what place"),
+              questionText.replace(/^Where/, "What's the location of")
+            ];
+            rephrasedQuestion = whereVariations[Math.floor(Math.random() * whereVariations.length)];
+          } else {
+            // Generic rephrasing for other question types
+            const genericVariations = [
+              `Could you provide more details about: ${questionText.toLowerCase()}`,
+              `I need additional information regarding: ${questionText.toLowerCase()}`,
+              `Can you elaborate on the following: ${questionText.toLowerCase()}`,
+              `Please share more about: ${questionText.toLowerCase()}`,
+              `I'd like to know more concerning: ${questionText.toLowerCase()}`
+            ];
+            rephrasedQuestion = genericVariations[Math.floor(Math.random() * genericVariations.length)];
+          }
+          
+          questionText = rephrasedQuestion;
+        }
+        
+        // Add question to chat
+        const questionMessage: ChatMessage = {
+          id: Date.now(),
+          type: 'bot',
+          text: questionText,
+          timestamp: getCurrentTime(),
+          date: getCurrentDate()
+        };
+        
+        setChatMessages(prev => [...prev, questionMessage]);
+        
+        // Add question to timeline (context history)
+        const questionTimelineEntry: TimelineEntry = {
+          id: Date.now() + 1, // Ensure unique ID
+          type: 'bot',
+          text: questionText,
+          timestamp: getCurrentTime(),
+          date: getCurrentDate()
+        };
+        
+        setTimelineEntries(prev => [...prev, questionTimelineEntry]);
+      }
+    } catch (error) {
+      console.error('Error getting next question:', error);
+    }
+  };
+
+  const submitAnswerToBot = async (answer: string) => {
+    setChatSession(prev => ({ ...prev, isLoading: true }));
+    
+    try {
+      const response = await fetch('http://localhost:5000/api/chat/submit-answer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ answer })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Add ALL answers to timeline (both correct and incorrect)
+        const timelineEntry: TimelineEntry = {
+          id: Date.now(),
+          type: 'user',
+          text: answer,
+          timestamp: getCurrentTime(),
+          date: getCurrentDate()
+        };
+        setTimelineEntries(prev => [...prev, timelineEntry]);
+        
+        // Update progress
+        setChatSession(prev => ({
+          ...prev,
+          progress: data.progress,
+          isLoading: false
+        }));
+        
+        // Get next question after a delay (regardless of correctness)
+        setTimeout(() => {
+          getNextQuestion();
+        }, data.valid ? 500 : 500); // Same short delay for both correct and incorrect answers
+      } else {
+        setChatSession(prev => ({ ...prev, isLoading: false }));
+        console.error('Failed to submit answer:', data.error);
+      }
+    } catch (error) {
+      setChatSession(prev => ({ ...prev, isLoading: false }));
+      console.error('Error submitting answer:', error);
+    }
+  };
+
+  const completeChat = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/chat/complete');
+      const data = await response.json();
+      
+      if (data.success) {
+        setChatSession(prev => ({
+          ...prev,
+          completed: true,
+          currentQuestion: null
+        }));
+        
+        const completionMessage: ChatMessage = {
+          id: Date.now(),
+          type: 'bot',
+          text: `🎉 All done! Thank you for your responses. Your enhanced summary has been generated and saved.`,
+          timestamp: getCurrentTime(),
+          date: getCurrentDate()
+        };
+        
+        setChatMessages(prev => [...prev, completionMessage]);
+      }
+    } catch (error) {
+      console.error('Error completing chat:', error);
+    }
+  };
+
+  const handleSend = async () => {
+    // If mic is recording, stop it first but don't send yet
     if (isRecording) {
       setIsRecording(false);
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
+      return; // Exit early, don't send message
     }
+
+    // Check if chat session is active
+    if (chatSession.isActive && chatSession.currentQuestion) {
+      // Q-Bot mode: submit answer
+      if (!message.trim()) return;
+      
+      const userMessage: ChatMessage = {
+        id: Date.now(),
+        type: 'user',
+        text: message.trim(),
+        timestamp: getCurrentTime(),
+        date: getCurrentDate()
+      };
+      
+      setChatMessages(prev => [...prev, userMessage]);
+      
+      const answerText = message.trim();
+      setMessage('');
+      
+      await submitAnswerToBot(answerText);
+      return;
+    }
+
+    // Regular file upload handling for backward compatibility
+    if (!message.trim() && pendingFiles.length === 0) return;
 
     let currentMessageCounter = messageCounter;
     const uploadedFileUrls: {url: string; name: string}[] = [];
@@ -264,15 +565,20 @@ const Index = () => {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      // Send if there is a message or pending files
-      if (message.trim() || pendingFiles.length > 0) {
-        handleSend();
-      } else if (isRecording) {
-        // If mic is on but no message, just turn off mic
+      
+      // If mic is recording, stop it first before sending message
+      if (isRecording) {
         setIsRecording(false);
         if (recognitionRef.current) {
           recognitionRef.current.stop();
         }
+        // Don't send the message if mic was recording, just stop the mic
+        return;
+      }
+      
+      // Send if there is a message or pending files
+      if (message.trim() || pendingFiles.length > 0) {
+        handleSend();
       }
     }
   };
@@ -297,6 +603,17 @@ const Index = () => {
   useEffect(() => {
     scrollToBottom();
   }, [chatMessages]);
+
+  // Auto-start chat session after project data is loaded
+  useEffect(() => {
+    console.log('Project data loading state:', { isLoading, projectData: !!projectData, error: !!error });
+    
+    // Only start chat session after project data is successfully loaded
+    if (!isLoading && projectData && !error && !chatSession.isStarted) {
+      console.log('Project data loaded successfully, starting chat session...');
+      startChatSession();
+    }
+  }, [isLoading, projectData, error, chatSession.isStarted]);
 
   // Handle window resize to maintain proper panel sizing
   useEffect(() => {
@@ -431,8 +748,6 @@ const Index = () => {
 
         {/* Right Panel - Chat Area */}
         <div className="flex-grow h-full flex flex-col bg-white shadow-lg min-w-0 overflow-hidden">
-          {/* Chat Header Removed */}
-
           {/* Chat Messages */}
           <div 
             ref={chatMessagesRef}
@@ -458,12 +773,18 @@ const Index = () => {
                   )}
                 </div>
                 {/* Message Bubble and Timestamp */}
-                <div className="flex flex-col min-w-0 flex-1 max-w-[calc(100%-3rem)]">
-                  <div className={`p-3 rounded-xl text-base shadow-sm border transition-all duration-200 hover:shadow-md break-words overflow-hidden ${
+                <div className="flex flex-col min-w-0 flex-1 max-w-[80%]">
+                  <div className={`p-3 rounded-xl text-base shadow-sm border transition-all duration-200 hover:shadow-md word-wrap break-words ${
                     msg.type === 'bot'
                       ? 'bg-gray-100 border-gray-200 text-gray-700 rounded-tl-sm'
                       : 'rounded-tr-sm'
-                  }`} style={msg.type === 'user' ? { backgroundColor: 'rgba(237,249,240,255)', border: '1px solid #d1fae5', color: '#065f46' } : {}}>
+                  }`} style={{
+                    ...(msg.type === 'user' ? { backgroundColor: 'rgba(237,249,240,255)', border: '1px solid #d1fae5', color: '#065f46' } : {}),
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word',
+                    hyphens: 'auto',
+                    lineHeight: '1.5'
+                  }}>
                     
                     {/* Display files if they exist - PDF at top-right, text below */}
                     {msg.files && msg.files.length > 0 && (
@@ -549,7 +870,7 @@ const Index = () => {
                         
                         {/* Text content below files */}
                         {msg.text && (
-                          <div className="break-words text-base leading-relaxed word-wrap overflow-wrap-anywhere">
+                          <div className="word-wrap break-words" style={{ wordBreak: 'break-word', overflowWrap: 'break-word', hyphens: 'auto', lineHeight: '1.5' }}>
                             {msg.text}
                           </div>
                         )}
@@ -558,7 +879,7 @@ const Index = () => {
                     
                     {/* Display text only if no files are present */}
                     {msg.text && (!msg.files || msg.files.length === 0) && (
-                      <div className="break-words text-base leading-relaxed word-wrap overflow-wrap-anywhere">
+                      <div className="word-wrap break-words" style={{ wordBreak: 'break-word', overflowWrap: 'break-word', hyphens: 'auto', lineHeight: '1.5' }}>
                         {msg.text}
                       </div>
                     )}
@@ -686,7 +1007,14 @@ const Index = () => {
               value={message}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder="Type your response..."
+              placeholder={
+                chatSession.isActive && chatSession.currentQuestion 
+                  ? "Type your answer here..." 
+                  : chatSession.isLoading
+                  ? "Starting interview..."
+                  : "Preparing interview questions..."
+              }
+              disabled={chatSession.isLoading || (chatSession.isActive && !chatSession.currentQuestion)}
               className="flex-grow border rounded-lg p-2 text-base min-h-[40px] max-h-[120px] resize-none outline-none transition-all duration-200 overflow-y-hidden"
               style={{ 
                 borderColor: 'rgba(220,232,255,255)', 
@@ -698,23 +1026,35 @@ const Index = () => {
             
             <button
               onClick={handleSend}
-              disabled={!message.trim() && pendingFiles.length === 0}
+              disabled={
+                chatSession.isLoading || 
+                (chatSession.isActive && chatSession.currentQuestion && !message.trim()) ||
+                (!chatSession.isActive && !message.trim() && pendingFiles.length === 0)
+              }
               className="w-10 h-10 flex items-center justify-center text-white rounded-lg disabled:cursor-not-allowed transition-colors"
               style={{ 
-                backgroundColor: (!message.trim() && pendingFiles.length === 0) ? '#d1d5db' : '#f2603b'
+                backgroundColor: (
+                  chatSession.isLoading || 
+                  (chatSession.isActive && chatSession.currentQuestion && !message.trim()) ||
+                  (!chatSession.isActive && !message.trim() && pendingFiles.length === 0)
+                ) ? '#d1d5db' : '#f2603b'
               }}
               onMouseOver={e => { 
-                if (message.trim() || pendingFiles.length > 0) {
+                if (!e.currentTarget.disabled) {
                   (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#e55a35';
                 }
               }}
               onMouseOut={e => { 
-                if (message.trim() || pendingFiles.length > 0) {
+                if (!e.currentTarget.disabled) {
                   (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#f2603b';
                 }
               }}
             >
-              <Send className="w-5 h-5" />
+              {chatSession.isLoading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Send className="w-5 h-5" />
+              )}
             </button>
             </div>
           </div>

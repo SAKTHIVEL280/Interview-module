@@ -4,9 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-  "dev": "npm-run-all --parallel start:server start:frontend",
-  "start:server": "node server.js",
-  "start:frontend": "vite",
+    "dev": "vite",
+    "server": "node server.js",
+    "chat": "python chat-server.py",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
