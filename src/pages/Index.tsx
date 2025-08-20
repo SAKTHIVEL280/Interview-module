@@ -56,6 +56,200 @@ const Index = () => {
     isLoading: false
   });
   
+  // AI-powered question rephrasing function
+  const rephraseQuestionWithAI = async (originalQuestion: string): Promise<string> => {
+    try {
+      const API_KEY = "AIzaSyDJ9185yjRgJ5ykjv3FEdNJzutWX2tZQPE";
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
+      
+      const prompt = `You are an expert interviewer. I need you to completely rewrite this question using totally different words and structure, but asking for the exact same information.
+
+ORIGINAL QUESTION: "${originalQuestion}"
+
+IMPORTANT RULES:
+1. DO NOT use the same starting words (What, How, Why, etc.)
+2. DO NOT just add prefixes like "Can you tell me" or "I'd like to know"
+3. CREATE a completely new sentence structure
+4. USE simple, everyday words that everyone understands
+5. AVOID fancy or complicated vocabulary
+6. MAKE it sound like a casual, friendly conversation
+7. KEEP it as one clear question
+8. USE words a 16-year-old would understand
+
+EXAMPLES:
+- Instead of "What kind of food does John like?" → "Tell me about the food John enjoys"
+- Instead of "What is Sarah's favorite color?" → "Which color does Sarah like best?"
+- Instead of "How does this work?" → "Walk me through how this happens"
+
+REWRITTEN QUESTION (use simple words only):`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: prompt }]
+          }]
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts[0]) {
+        let rephrasedQuestion = data.candidates[0].content.parts[0].text.trim();
+        
+        // Clean up the response - remove any extra text and formatting
+        rephrasedQuestion = rephrasedQuestion.replace(/^REWRITTEN QUESTION[:\s]*/i, '');
+        rephrasedQuestion = rephrasedQuestion.replace(/^Question[:\s]*/i, '');
+        rephrasedQuestion = rephrasedQuestion.replace(/^Answer[:\s]*/i, '');
+        rephrasedQuestion = rephrasedQuestion.replace(/^\*+\s*/, '');
+        rephrasedQuestion = rephrasedQuestion.replace(/\*+$/, '');
+        rephrasedQuestion = rephrasedQuestion.replace(/^["']|["']$/g, '');
+        rephrasedQuestion = rephrasedQuestion.trim();
+        
+        // Split by lines and take only the first meaningful line
+        const lines = rephrasedQuestion.split('\n').filter(line => line.trim().length > 0);
+        if (lines.length > 0) {
+          rephrasedQuestion = lines[0].trim();
+        }
+        
+        // Ensure it ends with a question mark
+        if (!rephrasedQuestion.endsWith('?')) {
+          rephrasedQuestion += '?';
+        }
+        
+        // Validate that the rephrased question is actually different
+        const originalWords = originalQuestion.toLowerCase().split(' ');
+        const rephrasedWords = rephrasedQuestion.toLowerCase().split(' ');
+        const commonWords = originalWords.filter(word => rephrasedWords.includes(word));
+        
+        // If too many words are the same, try fallback
+        if (commonWords.length > originalWords.length * 0.7) {
+          console.log('AI rephrasing too similar, using creative fallback');
+          return getCreativeFallbackRephrasing(originalQuestion);
+        }
+        
+        console.log('AI Rephrasing successful:', { original: originalQuestion, rephrased: rephrasedQuestion });
+        return rephrasedQuestion;
+      } else {
+        throw new Error('Invalid response format from AI');
+      }
+    } catch (error) {
+      console.error('AI rephrasing failed:', error);
+      
+      // Fallback to creative rephrasing if AI fails
+      return getCreativeFallbackRephrasing(originalQuestion);
+    }
+  };
+
+  // Creative fallback rephrasing function - works for ANY question type
+  const getCreativeFallbackRephrasing = (originalQuestion: string): string => {
+    const questionLower = originalQuestion.toLowerCase();
+    
+    // Extract person's name if present
+    const personMatch = originalQuestion.match(/(\w+)'s/);
+    const person = personMatch ? personMatch[1] : null;
+    
+    // Create multiple variation patterns that work for any question
+    const patterns = [
+      // Pattern 1: Change question starters
+      {
+        from: /^What (is|are|does|do|did|was|were)/i,
+        to: ["Tell me", "Share", "Let me know", "I want to know", "Help me understand"]
+      },
+      {
+        from: /^How (is|are|does|do|did|was|were|can|could|would|will)/i,
+        to: ["Show me how", "Explain how", "Walk me through how", "Help me understand how"]
+      },
+      {
+        from: /^Why (is|are|does|do|did|was|were|can|could|would|will)/i,
+        to: ["Help me understand why", "Explain why", "Tell me why", "I want to know why"]
+      },
+      {
+        from: /^Which/i,
+        to: ["Tell me which", "Share which", "Let me know which", "I want to know which"]
+      },
+      {
+        from: /^Who/i,
+        to: ["Tell me who", "Share who", "Let me know who", "I want to know who"]
+      },
+      {
+        from: /^Where/i,
+        to: ["Tell me where", "Share where", "Let me know where", "I want to know where"]
+      },
+      {
+        from: /^When/i,
+        to: ["Tell me when", "Share when", "Let me know when", "I want to know when"]
+      }
+    ];
+    
+    // Try to apply pattern-based rephrasing
+    for (const pattern of patterns) {
+      if (pattern.from.test(originalQuestion)) {
+        const replacement = pattern.to[Math.floor(Math.random() * pattern.to.length)];
+        let result = originalQuestion.replace(pattern.from, replacement);
+        
+        // Clean up the result
+        result = result.replace(/\?$/, '');
+        
+        // Add person-specific variations if person is found
+        if (person) {
+          const personVariations = [
+            ` about ${person}`,
+            ` regarding ${person}`,
+            ` concerning ${person}`,
+            ` when it comes to ${person}`
+          ];
+          
+          // Sometimes add person context
+          if (Math.random() > 0.5) {
+            result += personVariations[Math.floor(Math.random() * personVariations.length)];
+          }
+        }
+        
+        // Ensure it ends with a question mark
+        if (!result.endsWith('?')) {
+          result += '?';
+        }
+        
+        return result;
+      }
+    }
+    
+    // If no pattern matches, use generic transformations
+    const genericTransformations = [
+      // Simple replacements
+      originalQuestion.replace(/^What's/, "Tell me what").replace(/\?$/, '?'),
+      originalQuestion.replace(/^What/, "Share").replace(/\?$/, '?'),
+      originalQuestion.replace(/^How/, "Explain how").replace(/\?$/, '?'),
+      
+      // Add conversation starters
+      `Can you tell me ${originalQuestion.toLowerCase().replace(/^(what|how|why|which|who|where|when)\s+/i, '')}`,
+      `I'd like to know ${originalQuestion.toLowerCase().replace(/^(what|how|why|which|who|where|when)\s+/i, '')}`,
+      `Could you share ${originalQuestion.toLowerCase().replace(/^(what|how|why|which|who|where|when)\s+/i, '')}`,
+      
+      // Flip the structure
+      `Please tell me ${originalQuestion.toLowerCase().replace(/\?$/, '')}?`,
+      `I want to understand ${originalQuestion.toLowerCase().replace(/\?$/, '')}?`,
+      `Help me learn ${originalQuestion.toLowerCase().replace(/\?$/, '')}?`
+    ];
+    
+    let result = genericTransformations[Math.floor(Math.random() * genericTransformations.length)];
+    
+    // Ensure it ends with a question mark
+    if (!result.endsWith('?')) {
+      result += '?';
+    }
+    
+    return result;
+  };
+  
   const recognitionRef = useRef<any>(null);
 
   const chatMessagesRef = useRef<HTMLDivElement>(null);
@@ -177,83 +371,16 @@ const Index = () => {
         // Rephrase question differently if it's a retry
         let questionText = data.question;
         if (data.is_retry) {
-          // Create truly different question variations that mean the same thing
-          const questionLower = data.question.toLowerCase();
-          let rephrasedQuestion = data.question;
-          
-          // Different patterns for different question types
-          if (questionLower.includes('what') && questionLower.includes('food')) {
-            const foodVariations = [
-              "Which dish or cuisine does Naveen prefer?",
-              "Can you tell me about Naveen's food preferences?",
-              "What type of cuisine or dish is Naveen's favorite?",
-              "Which food items does Naveen enjoy the most?",
-              "What does Naveen like to eat?"
-            ];
-            rephrasedQuestion = foodVariations[Math.floor(Math.random() * foodVariations.length)];
-          } else if (questionLower.includes('what') && questionLower.includes('team')) {
-            const teamVariations = [
-              "Which cricket team does Naveen support?",
-              "Can you name Naveen's preferred cricket team?",
-              "Which team does Naveen cheer for in cricket?",
-              "What cricket team is Naveen a fan of?",
-              "Which cricket club does Naveen follow?"
-            ];
-            rephrasedQuestion = teamVariations[Math.floor(Math.random() * teamVariations.length)];
-          } else if (questionLower.includes('what') && questionLower.includes('number')) {
-            const numberVariations = [
-              "Which number holds special meaning for Naveen?",
-              "Can you tell me Naveen's lucky or favorite number?",
-              "What number does Naveen prefer or find significant?",
-              "Which digit or number is most important to Naveen?",
-              "What's the number that Naveen likes best?"
-            ];
-            rephrasedQuestion = numberVariations[Math.floor(Math.random() * numberVariations.length)];
-          } else if (questionLower.includes('how')) {
-            const howVariations = [
-              questionText.replace(/^How/, "In what way"),
-              questionText.replace(/^How/, "Can you explain how"),
-              questionText.replace(/^How/, "What's the method for"),
-              questionText.replace(/^How/, "Could you describe how")
-            ];
-            rephrasedQuestion = howVariations[Math.floor(Math.random() * howVariations.length)];
-          } else if (questionLower.includes('why')) {
-            const whyVariations = [
-              questionText.replace(/^Why/, "What's the reason"),
-              questionText.replace(/^Why/, "Can you explain why"),
-              questionText.replace(/^Why/, "What causes"),
-              questionText.replace(/^Why/, "For what purpose")
-            ];
-            rephrasedQuestion = whyVariations[Math.floor(Math.random() * whyVariations.length)];
-          } else if (questionLower.includes('when')) {
-            const whenVariations = [
-              questionText.replace(/^When/, "At what time"),
-              questionText.replace(/^When/, "During which period"),
-              questionText.replace(/^When/, "Can you specify when"),
-              questionText.replace(/^When/, "What's the timing for")
-            ];
-            rephrasedQuestion = whenVariations[Math.floor(Math.random() * whenVariations.length)];
-          } else if (questionLower.includes('where')) {
-            const whereVariations = [
-              questionText.replace(/^Where/, "In which location"),
-              questionText.replace(/^Where/, "Can you specify where"),
-              questionText.replace(/^Where/, "At what place"),
-              questionText.replace(/^Where/, "What's the location of")
-            ];
-            rephrasedQuestion = whereVariations[Math.floor(Math.random() * whereVariations.length)];
-          } else {
-            // Generic rephrasing for other question types
-            const genericVariations = [
-              `Could you provide more details about: ${questionText.toLowerCase()}`,
-              `I need additional information regarding: ${questionText.toLowerCase()}`,
-              `Can you elaborate on the following: ${questionText.toLowerCase()}`,
-              `Please share more about: ${questionText.toLowerCase()}`,
-              `I'd like to know more concerning: ${questionText.toLowerCase()}`
-            ];
-            rephrasedQuestion = genericVariations[Math.floor(Math.random() * genericVariations.length)];
+          console.log('Question retry detected, using AI to rephrase:', data.question);
+          try {
+            // Use AI to rephrase the question completely differently
+            questionText = await rephraseQuestionWithAI(data.question);
+            console.log('AI rephrasing completed:', questionText);
+          } catch (error) {
+            console.error('AI rephrasing failed, using fallback:', error);
+            // Fallback already handled in the rephraseQuestionWithAI function
+            questionText = getCreativeFallbackRephrasing(data.question);
           }
-          
-          questionText = rephrasedQuestion;
         }
         
         // Add question to chat
