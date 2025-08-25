@@ -75,13 +75,14 @@ IMPORTANT RULES:
 6. MAKE it sound like a casual, friendly conversation
 7. KEEP it as one clear question
 8. USE words a 16-year-old would understand
+9. RETURN ONLY the rephrased question, nothing else
 
 EXAMPLES:
 - Instead of "What kind of food does John like?" → "Tell me about the food John enjoys"
 - Instead of "What is Sarah's favorite color?" → "Which color does Sarah like best?"
 - Instead of "How does this work?" → "Walk me through how this happens"
 
-REWRITTEN QUESTION (use simple words only):`;
+RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra text.`;
 
       const response = await fetch(url, {
         method: 'POST',
@@ -108,6 +109,7 @@ REWRITTEN QUESTION (use simple words only):`;
         rephrasedQuestion = rephrasedQuestion.replace(/^REWRITTEN QUESTION[:\s]*/i, '');
         rephrasedQuestion = rephrasedQuestion.replace(/^Question[:\s]*/i, '');
         rephrasedQuestion = rephrasedQuestion.replace(/^Answer[:\s]*/i, '');
+        rephrasedQuestion = rephrasedQuestion.replace(/^Rephrased[:\s]*/i, '');
         rephrasedQuestion = rephrasedQuestion.replace(/^\*+\s*/, '');
         rephrasedQuestion = rephrasedQuestion.replace(/\*+$/, '');
         rephrasedQuestion = rephrasedQuestion.replace(/^["']|["']$/g, '');
@@ -124,15 +126,9 @@ REWRITTEN QUESTION (use simple words only):`;
           rephrasedQuestion += '?';
         }
         
-        // Validate that the rephrased question is actually different
-        const originalWords = originalQuestion.toLowerCase().split(' ');
-        const rephrasedWords = rephrasedQuestion.toLowerCase().split(' ');
-        const commonWords = originalWords.filter(word => rephrasedWords.includes(word));
-        
-        // If too many words are the same, try fallback
-        if (commonWords.length > originalWords.length * 0.7) {
-          console.log('AI rephrasing too similar, using creative fallback');
-          return getCreativeFallbackRephrasing(originalQuestion);
+        // Basic validation - make sure we got a meaningful response
+        if (rephrasedQuestion.length < 5 || rephrasedQuestion.toLowerCase() === originalQuestion.toLowerCase()) {
+          throw new Error('AI returned invalid or identical response');
         }
         
         console.log('AI Rephrasing successful:', { original: originalQuestion, rephrased: rephrasedQuestion });
@@ -143,111 +139,16 @@ REWRITTEN QUESTION (use simple words only):`;
     } catch (error) {
       console.error('AI rephrasing failed:', error);
       
-      // Fallback to creative rephrasing if AI fails
+      // Fallback to original question if AI fails
       return getCreativeFallbackRephrasing(originalQuestion);
     }
   };
 
-  // Creative fallback rephrasing function - works for ANY question type
+  // Simple fallback that just returns the original question if AI fails
   const getCreativeFallbackRephrasing = (originalQuestion: string): string => {
-    const questionLower = originalQuestion.toLowerCase();
-    
-    // Extract person's name if present
-    const personMatch = originalQuestion.match(/(\w+)'s/);
-    const person = personMatch ? personMatch[1] : null;
-    
-    // Create multiple variation patterns that work for any question
-    const patterns = [
-      // Pattern 1: Change question starters
-      {
-        from: /^What (is|are|does|do|did|was|were)/i,
-        to: ["Tell me", "Share", "Let me know", "I want to know", "Help me understand"]
-      },
-      {
-        from: /^How (is|are|does|do|did|was|were|can|could|would|will)/i,
-        to: ["Show me how", "Explain how", "Walk me through how", "Help me understand how"]
-      },
-      {
-        from: /^Why (is|are|does|do|did|was|were|can|could|would|will)/i,
-        to: ["Help me understand why", "Explain why", "Tell me why", "I want to know why"]
-      },
-      {
-        from: /^Which/i,
-        to: ["Tell me which", "Share which", "Let me know which", "I want to know which"]
-      },
-      {
-        from: /^Who/i,
-        to: ["Tell me who", "Share who", "Let me know who", "I want to know who"]
-      },
-      {
-        from: /^Where/i,
-        to: ["Tell me where", "Share where", "Let me know where", "I want to know where"]
-      },
-      {
-        from: /^When/i,
-        to: ["Tell me when", "Share when", "Let me know when", "I want to know when"]
-      }
-    ];
-    
-    // Try to apply pattern-based rephrasing
-    for (const pattern of patterns) {
-      if (pattern.from.test(originalQuestion)) {
-        const replacement = pattern.to[Math.floor(Math.random() * pattern.to.length)];
-        let result = originalQuestion.replace(pattern.from, replacement);
-        
-        // Clean up the result
-        result = result.replace(/\?$/, '');
-        
-        // Add person-specific variations if person is found
-        if (person) {
-          const personVariations = [
-            ` about ${person}`,
-            ` regarding ${person}`,
-            ` concerning ${person}`,
-            ` when it comes to ${person}`
-          ];
-          
-          // Sometimes add person context
-          if (Math.random() > 0.5) {
-            result += personVariations[Math.floor(Math.random() * personVariations.length)];
-          }
-        }
-        
-        // Ensure it ends with a question mark
-        if (!result.endsWith('?')) {
-          result += '?';
-        }
-        
-        return result;
-      }
-    }
-    
-    // If no pattern matches, use generic transformations
-    const genericTransformations = [
-      // Simple replacements
-      originalQuestion.replace(/^What's/, "Tell me what").replace(/\?$/, '?'),
-      originalQuestion.replace(/^What/, "Share").replace(/\?$/, '?'),
-      originalQuestion.replace(/^How/, "Explain how").replace(/\?$/, '?'),
-      
-      // Add conversation starters
-      `Can you tell me ${originalQuestion.toLowerCase().replace(/^(what|how|why|which|who|where|when)\s+/i, '')}`,
-      `I'd like to know ${originalQuestion.toLowerCase().replace(/^(what|how|why|which|who|where|when)\s+/i, '')}`,
-      `Could you share ${originalQuestion.toLowerCase().replace(/^(what|how|why|which|who|where|when)\s+/i, '')}`,
-      
-      // Flip the structure
-      `Please tell me ${originalQuestion.toLowerCase().replace(/\?$/, '')}?`,
-      `I want to understand ${originalQuestion.toLowerCase().replace(/\?$/, '')}?`,
-      `Help me learn ${originalQuestion.toLowerCase().replace(/\?$/, '')}?`
-    ];
-    
-    let result = genericTransformations[Math.floor(Math.random() * genericTransformations.length)];
-    
-    // Ensure it ends with a question mark
-    if (!result.endsWith('?')) {
-      result += '?';
-    }
-    
-    return result;
+    // If AI fails completely, just return the original question
+    console.log('AI rephrasing failed completely, returning original question');
+    return originalQuestion;
   };
   
   const recognitionRef = useRef<any>(null);
