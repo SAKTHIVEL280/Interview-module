@@ -58,21 +58,23 @@ const Index = () => {
   
   // AI-powered question rephrasing function
   const rephraseQuestionWithAI = async (originalQuestion: string): Promise<string> => {
+    console.log('🤖 Starting AI rephrasing for:', originalQuestion);
+    
     try {
-      const API_KEY = "AIzaSyDJ9185yjRgJ5ykjv3FEdNJzutWX2tZQPE";
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
+      const API_KEY = "AIzaSyBPqXoIuouQ3IhtHe-l0kJYEDiL4-VAQx8";
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
       
       const prompt = `You are an expert interviewer. I need you to completely rewrite this question using totally different words and structure, but asking for the exact same information.
 
 ORIGINAL QUESTION: "${originalQuestion}"
 
 IMPORTANT RULES:
-1. DO NOT use the same starting words (What, How, Why, etc.)
+1. YOU CAN use the same starting words (What, How, Why, etc.) but it should be different than the original
 2. DO NOT just add prefixes like "Can you tell me" or "I'd like to know"
-3. CREATE a completely new sentence structure
+3. CREATE a completely new sentence structure 
 4. USE simple, everyday words that everyone understands
-5. AVOID fancy or complicated vocabulary
-6. MAKE it sound like a casual, friendly conversation
+5. AVOID fancy or complicated vocabulary make it easy to understand
+6. MAKE it sound like a casual, professional conversation
 7. KEEP it as one clear question
 8. USE words a 16-year-old would understand
 9. RETURN ONLY the rephrased question, nothing else
@@ -84,6 +86,8 @@ EXAMPLES:
 
 RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra text.`;
 
+      console.log('🌐 Making API request to Gemini...');
+      
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -96,14 +100,20 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
         })
       });
 
+      console.log('📡 API Response status:', response.status);
+
       if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ API request failed:', response.status, errorText);
+        throw new Error(`API request failed: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('📦 Raw API response:', data);
       
       if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts[0]) {
         let rephrasedQuestion = data.candidates[0].content.parts[0].text.trim();
+        console.log('🔤 Raw rephrased text:', rephrasedQuestion);
         
         // Clean up the response - remove any extra text and formatting
         rephrasedQuestion = rephrasedQuestion.replace(/^REWRITTEN QUESTION[:\s]*/i, '');
@@ -126,18 +136,22 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
           rephrasedQuestion += '?';
         }
         
+        console.log('🎯 Final rephrased question:', rephrasedQuestion);
+        
         // Basic validation - make sure we got a meaningful response
         if (rephrasedQuestion.length < 5 || rephrasedQuestion.toLowerCase() === originalQuestion.toLowerCase()) {
+          console.error('⚠️ AI returned invalid or identical response');
           throw new Error('AI returned invalid or identical response');
         }
         
-        console.log('AI Rephrasing successful:', { original: originalQuestion, rephrased: rephrasedQuestion });
+        console.log('✅ AI Rephrasing successful!');
         return rephrasedQuestion;
       } else {
+        console.error('❌ Invalid response format from AI:', data);
         throw new Error('Invalid response format from AI');
       }
     } catch (error) {
-      console.error('AI rephrasing failed:', error);
+      console.error('💥 AI rephrasing failed:', error);
       
       // Fallback to original question if AI fails
       return getCreativeFallbackRephrasing(originalQuestion);
@@ -271,17 +285,23 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
         
         // Rephrase question differently if it's a retry
         let questionText = data.question;
+        console.log('🔄 Question received from backend:', data.question);
+        console.log('🔍 Is this a retry?', data.is_retry);
+        
         if (data.is_retry) {
-          console.log('Question retry detected, using AI to rephrase:', data.question);
+          console.log('🚨 Question retry detected, using AI to rephrase:', data.question);
           try {
             // Use AI to rephrase the question completely differently
             questionText = await rephraseQuestionWithAI(data.question);
-            console.log('AI rephrasing completed:', questionText);
+            console.log('🎉 AI rephrasing completed successfully:', questionText);
           } catch (error) {
-            console.error('AI rephrasing failed, using fallback:', error);
+            console.error('💥 AI rephrasing failed, using fallback:', error);
             // Fallback already handled in the rephraseQuestionWithAI function
             questionText = getCreativeFallbackRephrasing(data.question);
+            console.log('🔄 Using fallback question:', questionText);
           }
+        } else {
+          console.log('✅ First attempt, using original question');
         }
         
         // Add question to chat
