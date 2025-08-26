@@ -335,6 +335,7 @@ class Questionnaire:
         6. Keep the same simple, direct style as the original
         7. Each line should start with "i know" just like the original
         8. ADD PROPER PUNCTUATION AND GRAMMAR - fix missing periods, commas, and capitalization to make it grammatically correct
+        9. Check for spelling mistake and correct them based on context.
 
         EXAMPLE FORMAT:
         If original says "i know what food he likes its an indian dish"

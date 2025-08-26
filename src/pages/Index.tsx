@@ -392,7 +392,7 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
         const completionMessage: ChatMessage = {
           id: Date.now(),
           type: 'bot',
-          text: `🎉 All done! Thank you for your responses. Your enhanced summary has been generated and saved.`,
+          text: `🎉 All done! Thank you for your responses.`,
           timestamp: getCurrentTime(),
           date: getCurrentDate()
         };
