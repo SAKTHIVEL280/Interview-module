@@ -83,16 +83,16 @@ const TopNavBar: React.FC<TopNavBarProps> = ({ projectId }) => {
         }}>
           <div style={{ display: 'flex', flexDirection: 'column', flex: '0 1 auto', minWidth: '120px' }}>
             <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Project ID</span>
-            <span style={{ fontSize: '14px', color: '#ffffff', fontWeight: 600, lineHeight: '1.2', whiteSpace: 'nowrap' }}>{data.projectId}</span>
+            <span style={{ fontSize: '15px', color: '#ffffff', fontWeight: 600, lineHeight: '1.2', whiteSpace: 'nowrap' }}>{data.projectId}</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', flex: '0 1 auto', minWidth: '130px' }}>
             <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Project Number</span>
-            <span style={{ fontSize: '14px', color: '#e2e8f0', fontWeight: 600, lineHeight: '1.2', whiteSpace: 'nowrap' }}>{data.projectNumber}</span>
+            <span style={{ fontSize: '15px', color: '#e2e8f0', fontWeight: 600, lineHeight: '1.2', whiteSpace: 'nowrap' }}>{data.projectNumber}</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minWidth: '200px', maxWidth: '300px' }}>
             <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Project Name</span>
             <span style={{ 
-              fontSize: '14px', 
+              fontSize: '15px', 
               color: '#e2e8f0', 
               fontWeight: 600, 
               lineHeight: '1.3', 
@@ -107,12 +107,12 @@ const TopNavBar: React.FC<TopNavBarProps> = ({ projectId }) => {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', flex: '0 1 auto', minWidth: '100px' }}>
             <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Account ID</span>
-            <span style={{ fontSize: '14px', color: '#e2e8f0', fontWeight: 600, lineHeight: '1.2', whiteSpace: 'nowrap' }}>{data.accountId}</span>
+            <span style={{ fontSize: '15px', color: '#e2e8f0', fontWeight: 600, lineHeight: '1.2', whiteSpace: 'nowrap' }}>{data.accountId}</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minWidth: '180px', maxWidth: '250px' }}>
             <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Account Name</span>
             <span style={{ 
-              fontSize: '14px', 
+              fontSize: '15px', 
               color: '#e2e8f0', 
               fontWeight: 600, 
               lineHeight: '1.3', 
@@ -127,7 +127,7 @@ const TopNavBar: React.FC<TopNavBarProps> = ({ projectId }) => {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', flex: '0 1 auto', minWidth: '80px' }}>
             <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Country</span>
-            <span style={{ fontSize: '14px', color: '#e2e8f0', fontWeight: 600, lineHeight: '1.2', whiteSpace: 'nowrap' }}>{data.country}</span>
+            <span style={{ fontSize: '15px', color: '#e2e8f0', fontWeight: 600, lineHeight: '1.2', whiteSpace: 'nowrap' }}>{data.country}</span>
           </div>
         </div>
       </div>
