@@ -28,8 +28,9 @@ echo ✅ Node.js and Python are available
 echo.
 
 REM Install dependencies if node_modules doesn't exist
-if not exist "node_modules" (
+if not exist "%~dp0..\node_modules" (
     echo 📦 Installing dependencies...
+    cd /d "%~dp0.."
     npm install
     if %errorlevel% neq 0 (
         echo ERROR: Failed to install dependencies
@@ -45,19 +46,19 @@ echo.
 
 REM Start the servers in separate windows
 echo 1️⃣ Starting Node.js Backend Server (Port 5000)...
-start "Backend Server" cmd /k "echo Backend Server - Port 5000 && npm run server"
+start "Backend Server" cmd /k "echo Backend Server - Port 5000 && cd /d "%~dp0.." && npm run server"
 
 REM Wait a moment for backend to start
 timeout /t 3 /nobreak >nul
 
 echo 2️⃣ Starting Python Chat Server (Port 5001)...
-start "Python Chat Server" cmd /k "echo Python Chat Server - Port 5001 && npm run chat"
+start "Python Chat Server" cmd /k "echo Python Chat Server - Port 5001 && cd /d "%~dp0.." && npm run chat"
 
 REM Wait a moment for chat server to start
 timeout /t 3 /nobreak >nul
 
 echo 3️⃣ Starting React Frontend (Port 8080)...
-start "React Frontend" cmd /k "echo React Frontend - Port 8080 && npm run dev"
+start "React Frontend" cmd /k "echo React Frontend - Port 8080 && cd /d "%~dp0.." && npm run dev"
 
 echo.
 echo ⏳ Waiting for servers to fully start...

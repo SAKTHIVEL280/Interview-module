@@ -5,12 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "server": "node server.js",
-    "chat": "python chat-server.py",
+    "server": "node server/server.js",
+    "chat": "cd server/chat && python chat-server.py",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node scripts/start-all.js",
+    "start:backend": "node server/server.js",
+    "start:chat": "cd server/chat && python chat-server.py",
+    "start:frontend": "vite",
+    "start:batch": "scripts/start-interview-module.bat",
+    "start:parallel": "npm-run-all --parallel start:backend start:chat start:frontend"
   },
   "dependencies": {
     "@radix-ui/react-toast": "^1.2.1",

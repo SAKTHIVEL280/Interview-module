@@ -16,7 +16,11 @@ class Questionnaire:
             'Content-Type': 'application/json',
             'X-goog-api-key': self.api_key
         }
-        self.answers_file = "enhanced_summary.txt"
+        
+        # Get the current working directory (should be data directory)
+        self.data_dir = os.getcwd()
+        self.answers_file = os.path.join(self.data_dir, "enhanced_summary.txt")
+        
         self.collected_answers = []
         self.max_retries = 3
         

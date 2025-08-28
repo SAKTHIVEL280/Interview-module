@@ -12,12 +12,20 @@ const PORT = 5000;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const projectRoot = path.dirname(__dirname); // Go up one level to project root
 
 // Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, 'uploads');
+const uploadsDir = path.join(projectRoot, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
   console.log('Created uploads directory');
+}
+
+// Ensure data directory exists
+const dataDir = path.join(projectRoot, 'data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir);
+  console.log('Created data directory');
 }
 
 // CORS configuration
@@ -44,10 +52,10 @@ const dbConfig = {
 };
 
 // Serve uploaded files
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(projectRoot, 'uploads')));
 
 // Serve generated JSON files
-app.use('/json', express.static(__dirname, {
+app.use('/json', express.static(dataDir, {
   setHeaders: (res, path) => {
     if (path.endsWith('.json')) {
       res.setHeader('Content-Type', 'application/json');
@@ -56,7 +64,7 @@ app.use('/json', express.static(__dirname, {
 }));
 
 // Serve generated text files
-app.use('/text', express.static(__dirname, {
+app.use('/text', express.static(dataDir, {
   setHeaders: (res, path) => {
     if (path.endsWith('.txt')) {
       res.setHeader('Content-Type', 'text/plain');
@@ -388,9 +396,9 @@ function saveSectionSummaries(sectionSummaryDict, projectId) {
     textContent = textContent.trim();
   }
   
-  const filePath = path.join(__dirname, `summary.txt`);
+  const filePath = path.join(dataDir, `summary.txt`);
   fs.writeFileSync(filePath, textContent, 'utf-8');
-  console.log(`Section summaries saved to summary.txt`);
+  console.log(`Section summaries saved to data/summary.txt`);
   return filePath;
 }
 
@@ -411,9 +419,9 @@ function saveInteractionsText(interactions, projectId) {
     textContent = textContent.trim();
   }
   
-  const filePath = path.join(__dirname, `question.txt`);
+  const filePath = path.join(dataDir, `question.txt`);
   fs.writeFileSync(filePath, textContent, 'utf-8');
-  console.log(`Interactions saved to question.txt`);
+  console.log(`Interactions saved to data/question.txt`);
   return filePath;
 }
 

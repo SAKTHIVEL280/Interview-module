@@ -194,12 +194,24 @@ if __name__ == "__main__":
     print("=== Interview Module Chat Server ===")
     print("Initializing chat functionality...")
     
-    # Check if required files exist
-    required_files = ['summary.txt', 'question.txt']
+    # Get the project root directory (two levels up from chat-server.py)
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(os.path.dirname(current_dir))
+    data_dir = os.path.join(project_root, 'data')
+    
+    # Check if required files exist in data directory
+    required_files = [
+        os.path.join(data_dir, 'summary.txt'), 
+        os.path.join(data_dir, 'question.txt')
+    ]
     missing_files = [f for f in required_files if not os.path.exists(f)]
     
     if missing_files:
-        print(f"WARNING: Missing files: {missing_files}")
+        print(f"WARNING: Missing files in data directory: {[os.path.basename(f) for f in missing_files]}")
         print("The chat server will start, but may not work properly until files are generated.")
+    
+    # Change working directory to data directory so Q-Bot can find the files
+    os.chdir(data_dir)
+    print(f"Working directory set to: {data_dir}")
     
     start_chat_server()
