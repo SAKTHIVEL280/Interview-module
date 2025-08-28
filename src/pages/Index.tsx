@@ -1137,14 +1137,6 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
                 <div className="flex flex-col min-w-0 flex-1 max-w-[80%]">
                   <div className="p-3 rounded-xl text-base shadow-sm border bg-gray-100 border-gray-200 text-gray-700 rounded-tl-sm max-w-fit">
                     <div className="flex items-center gap-3">
-                      <span 
-                        className="text-gray-600 text-sm font-medium" 
-                        style={{ 
-                          animation: 'processingPulse 1.6s ease-in-out infinite' 
-                        }}
-                      >
-                        Processing...
-                      </span>
                       <div className="flex gap-1">
                         <div className="w-2 h-2 rounded-full" style={{ 
                           backgroundColor: 'rgba(45,62,79,255)', 
