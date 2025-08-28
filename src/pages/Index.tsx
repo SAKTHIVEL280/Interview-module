@@ -275,7 +275,9 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
         }, 400); // Reduced to 400ms for faster initial response
       } else {
         setChatSession(prev => ({ ...prev, isLoading: false }));
+        setIsTyping(false); // Hide typing indicator on error
         console.error('Failed to start chat session:', data.error);
+        console.log('Start chat session failed: typing indicator hidden'); // Debug log
         
         // Add error message to chat
         const errorMessage: ChatMessage = {
@@ -289,7 +291,9 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
       }
     } catch (error) {
       setChatSession(prev => ({ ...prev, isLoading: false }));
+      setIsTyping(false); // Hide typing indicator on error
       console.error('Error starting chat session:', error);
+      console.log('Start chat session error: typing indicator hidden'); // Debug log
       
       // Add error message to chat
       const errorMessage: ChatMessage = {
@@ -310,6 +314,8 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
       
       if (data.success) {
         if (data.completed) {
+          // Keep typing indicator visible during completion process
+          console.log('Questions completed: keeping typing indicator until completion message is ready'); // Debug log
           await completeChat();
           return;
         }
@@ -369,7 +375,9 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
         setTimelineEntries(prev => [...prev, questionTimelineEntry]);
       }
     } catch (error) {
+      setIsTyping(false); // Hide typing indicator on error
       console.error('Error getting next question:', error);
+      console.log('Get next question error: typing indicator hidden'); // Debug log
     }
   };
 
@@ -421,11 +429,15 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
         }, 600); // Reduced to 600ms for faster response
       } else {
         setChatSession(prev => ({ ...prev, isLoading: false }));
+        setIsTyping(false); // Hide typing indicator on error
         console.error('Failed to submit answer:', data.error);
+        console.log('Submit answer failed: typing indicator hidden'); // Debug log
       }
     } catch (error) {
       setChatSession(prev => ({ ...prev, isLoading: false }));
+      setIsTyping(false); // Hide typing indicator on error
       console.error('Error submitting answer:', error);
+      console.log('Submit answer error: typing indicator hidden'); // Debug log
     }
   };
 
@@ -438,21 +450,31 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
         setChatSession(prev => ({
           ...prev,
           completed: true,
-          currentQuestion: null
+          currentQuestion: null,
+          isLoading: false
         }));
         
-        const completionMessage: ChatMessage = {
-          id: Date.now(),
-          type: 'bot',
-          text: `🎉 All done! Thank you for your responses.`,
-          timestamp: getCurrentTime(),
-          date: getCurrentDate()
-        };
-        
-        setChatMessages(prev => [...prev, completionMessage]);
+        // Small delay to make the transition feel natural, then hide typing indicator and show completion message
+        setTimeout(() => {
+          setIsTyping(false);
+          console.log('Chat completion: typing indicator hidden with smooth transition'); // Debug log
+          
+          const completionMessage: ChatMessage = {
+            id: Date.now(),
+            type: 'bot',
+            text: `🎉 All done! Thank you for your responses.`,
+            timestamp: getCurrentTime(),
+            date: getCurrentDate()
+          };
+          
+          setChatMessages(prev => [...prev, completionMessage]);
+        }, 500); // Small delay for natural transition
       }
     } catch (error) {
       console.error('Error completing chat:', error);
+      // Hide typing indicator on error as well
+      setIsTyping(false);
+      console.log('Chat completion error: typing indicator hidden'); // Debug log
     }
   };
 
@@ -1230,13 +1252,22 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               placeholder={
-                chatSession.isActive && chatSession.currentQuestion 
+                chatSession.completed
+                  ? "Completed"
+                  : chatSession.isActive && chatSession.currentQuestion 
                   ? "Type your answer here..." 
                   : chatSession.isLoading
-                  ? "Starting interview..."
-                  : "Preparing interview questions..."
+                  ? "Loading..."
+                  : chatSession.isStarted
+                  ? "Waiting for next chat..."
+                  : "Loading..."
               }
-              disabled={chatSession.isLoading || (chatSession.isActive && !chatSession.currentQuestion)}
+              disabled={
+                chatSession.completed || 
+                chatSession.isLoading || 
+                (chatSession.isActive && !chatSession.currentQuestion) ||
+                (!chatSession.isActive && !chatSession.isStarted)
+              }
               className="flex-grow border rounded-lg p-2 text-base min-h-[40px] max-h-[120px] resize-none outline-none transition-all duration-200 overflow-y-hidden"
               style={{ 
                 borderColor: 'rgba(220,232,255,255)', 
@@ -1249,15 +1280,19 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
             <button
               onClick={handleSend}
               disabled={
+                chatSession.completed ||
                 chatSession.isLoading || 
                 (chatSession.isActive && chatSession.currentQuestion && !message.trim() && pendingFiles.length === 0) ||
+                (!chatSession.isActive && !chatSession.isStarted) ||
                 (!chatSession.isActive && !message.trim() && pendingFiles.length === 0)
               }
               className="w-10 h-10 flex items-center justify-center text-white rounded-lg disabled:cursor-not-allowed transition-colors"
               style={{ 
                 backgroundColor: (
+                  chatSession.completed ||
                   chatSession.isLoading || 
                   (chatSession.isActive && chatSession.currentQuestion && !message.trim() && pendingFiles.length === 0) ||
+                  (!chatSession.isActive && !chatSession.isStarted) ||
                   (!chatSession.isActive && !message.trim() && pendingFiles.length === 0)
                 ) ? '#d1d5db' : '#f2603b'
               }}
