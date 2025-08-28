@@ -327,22 +327,24 @@ class Questionnaire:
         {answers_text}
 
         STRICT INSTRUCTIONS:
+        do's :
         1. Keep the EXACT same format as the original summary - each piece of information on separate lines
         2. Replace the general statements with specific information from the user's answers
         3. Do NOT combine multiple lines into paragraphs
         4. Do NOT add any external knowledge, facts, or information not mentioned by the user
         5. Do NOT elaborate beyond what the user actually said
         6. Keep the same simple, direct style as the original
-        7. Each line should start with "i know" just like the original
+        7. Add the user's information (the answers) where it's relevant in the original summary
         8. ADD PROPER PUNCTUATION AND GRAMMAR - fix missing periods, commas, and capitalization to make it grammatically correct
-        9. Check for spelling mistake and correct them based on context.
+        9. Check for spelling mistake and correct them based on context
+        10. add the user's answer like it was meant to be there in original summary like it was always part of it.
 
-        EXAMPLE FORMAT:
-        If original says "i know what food he likes its an indian dish"
-        And user answered "dosa" for food question
-        Then output should be "I know what food he likes. It's dosa."
+        don'ts :
+        1. do not add additional information that wasn't provided by the user
+        2. do not add the text "the user said" or similar phrases
+        3. do not add the answers and questions as a list or separate section - integrate them into the summary naturally
 
-        Keep each fact on its own line, maintain the simple structure, but make it grammatically correct with proper punctuation.
+        maintain the same structure as the original, but make it grammatically correct with proper punctuation.
         """
         
         enhanced_summary = self.call_gemini_api(enhancement_prompt)

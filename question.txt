@@ -1,19 +1,5 @@
-1. What specific metrics or indicators were used to evaluate the effectiveness of the Workload Normalization Service in maintaining consistent development velocity across fluctuating workloads, and how were these metrics integrated into the system's performance monitoring?
+1. What kind of food does Naveen like?
 
-2. Can you provide details on the testing methodologies employed to validate the performance of the Dynamic Sprint Load Balancer, and what feedback was collected from stakeholders during this process?
+2. What is Naveen’s favourite team?
 
-3. How did the Historical Velocity Modeler contribute to addressing technical uncertainties or challenges related to maintaining consistent development velocity, and what specific data analysis was conducted to inform this approach?
-
-4. What role did the Developer Sentiment Integration play in ensuring that the system's performance was aligned with team-specific variability, and how were these insights used to refine the system's design?
-
-5. What was the approach taken to address overfitting historical patterns in the Throughput Quality Index Tracker, and what techniques or tools were used to mitigate this issue?
-
-6. Can you describe the process for calibrating the buffer in the system to ensure that it was optimized for sustainable delivery pace, and what factors were considered during this process?
-
-7. How did the project team incorporate feedback-driven planning into the system's development, and what specific feedback mechanisms were used to inform this approach?
-
-8. What metrics or indicators were used to evaluate the impact of the system's performance on team well-being and technical excellence, and how were these insights used to refine the system's design?
-
-9. Can you provide details on the resilience metrics used to ensure that the system's performance was robust in the face of disruption events, and how were these metrics integrated into the system's monitoring and maintenance processes?
-
-10. How did the project team address the challenge of acceptance of adaptive load tools, and what specific strategies or techniques were used to overcome this challenge?
+3. What is Naveen’s favourite number?
