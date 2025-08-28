@@ -41,6 +41,8 @@ const Index = () => {
   const [messageCounter, setMessageCounter] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [isTyping, setIsTyping] = useState(false); // AI typing indicator
+  const [typingMessage, setTypingMessage] = useState(''); // Current typing message
   const [leftPanelWidth, setLeftPanelWidth] = useState(50); // Default 50% (1:1 ratio)
   const [isLayoutInitialized, setIsLayoutInitialized] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -173,6 +175,36 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Helper function to reset textarea to normal size
+  const resetTextareaSize = () => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = '40px'; // Reset to initial single line height
+      textareaRef.current.style.overflowY = 'hidden';
+    }
+  };
+
+  // Professional typing messages
+  const getTypingMessage = () => {
+    return "Processing...";
+  };
+
+  // Reset textarea size when message becomes empty
+  useEffect(() => {
+    if (message === '') {
+      resetTextareaSize();
+    }
+  }, [message]);
+
+  // Auto-scroll when typing indicator appears or disappears
+  useEffect(() => {
+    if (isTyping) {
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100); // Small delay to ensure DOM is updated
+    }
+  }, [isTyping]);
+
   const getCurrentTime = () => {
     const now = new Date();
     const hours = now.getHours() % 12 || 12;
@@ -233,8 +265,14 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
         // Don't add welcome message to timeline - keep timeline empty initially
         setTimelineEntries([]);
         
-        // Get first question
-        await getNextQuestion();
+        // Show typing indicator IMMEDIATELY and get first question
+        setIsTyping(true);
+        setTypingMessage(getTypingMessage());
+        
+        // Small delay then get first question
+        setTimeout(() => {
+          getNextQuestion();
+        }, 400); // Reduced to 400ms for faster initial response
       } else {
         setChatSession(prev => ({ ...prev, isLoading: false }));
         console.error('Failed to start chat session:', data.error);
@@ -307,6 +345,8 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
         }
         
         // Add question to chat
+        setIsTyping(false); // Hide typing indicator
+        console.log('Q-Bot typing indicator hidden'); // Debug log
         const questionMessage: ChatMessage = {
           id: Date.now(),
           type: 'bot',
@@ -333,16 +373,21 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
     }
   };
 
-  const submitAnswerToBot = async (answer: string) => {
+  const submitAnswerToBot = async (answer: string, files?: {url: string; name: string}[]) => {
     setChatSession(prev => ({ ...prev, isLoading: true }));
     
     try {
+      const requestBody = {
+        answer,
+        files: files || []
+      };
+      
       const response = await fetch('http://localhost:5000/api/chat/submit-answer', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ answer })
+        body: JSON.stringify(requestBody)
       });
       
       const data = await response.json();
@@ -365,10 +410,15 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
           isLoading: false
         }));
         
-        // Get next question after a delay (regardless of correctness)
+        // Get next question immediately (no delay)
+        setIsTyping(true); // Show typing indicator immediately
+        setTypingMessage(getTypingMessage());
+        console.log('Q-Bot typing indicator shown'); // Debug log
+        
+        // Small delay just to show typing indicator then get next question
         setTimeout(() => {
           getNextQuestion();
-        }, data.valid ? 500 : 500); // Same short delay for both correct and incorrect answers
+        }, 600); // Reduced to 600ms for faster response
       } else {
         setChatSession(prev => ({ ...prev, isLoading: false }));
         console.error('Failed to submit answer:', data.error);
@@ -418,23 +468,64 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
 
     // Check if chat session is active
     if (chatSession.isActive && chatSession.currentQuestion) {
-      // Q-Bot mode: submit answer
-      if (!message.trim()) return;
+      // Q-Bot mode: submit answer with possible file uploads
+      if (!message.trim() && pendingFiles.length === 0) return;
+      
+      // Upload files first if any
+      const uploadedFileUrls: {url: string; name: string}[] = [];
+      
+      if (pendingFiles.length > 0) {
+        for (let i = 0; i < pendingFiles.length; i++) {
+          const file = pendingFiles[i];
+          
+          try {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            console.log(`Uploading file: ${file.name}`);
+            const response = await fetch('http://localhost:5000/api/upload', {
+              method: 'POST',
+              body: formData,
+            });
+            
+            if (!response.ok) {
+              const errorText = await response.text();
+              console.error(`Upload failed with status ${response.status}:`, errorText);
+              throw new Error(`Upload failed: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            console.log('Upload successful:', data);
+            uploadedFileUrls.push({ url: data.url, name: file.name });
+          } catch (error) {
+            console.error(`Upload error for file ${file.name}:`, error);
+            alert(`Upload failed for file: ${file.name}. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            return; // Stop if any upload fails
+          }
+        }
+      }
       
       const userMessage: ChatMessage = {
         id: Date.now(),
         type: 'user',
-        text: message.trim(),
+        text: message.trim() || `Uploaded ${uploadedFileUrls.length} file${uploadedFileUrls.length > 1 ? 's' : ''}: ${uploadedFileUrls.map(f => f.name).join(', ')}`,
         timestamp: getCurrentTime(),
-        date: getCurrentDate()
+        date: getCurrentDate(),
+        files: uploadedFileUrls.length > 0 ? uploadedFileUrls : undefined
       };
       
       setChatMessages(prev => [...prev, userMessage]);
       
-      const answerText = message.trim();
+      const answerText = message.trim() || `[Files uploaded: ${uploadedFileUrls.map(f => f.name).join(', ')}]`;
       setMessage('');
+      setPendingFiles([]);
+      resetTextareaSize(); // Reset textarea to normal size
       
-      await submitAnswerToBot(answerText);
+      // Show typing indicator IMMEDIATELY
+      setIsTyping(true);
+      setTypingMessage(getTypingMessage());
+      
+      await submitAnswerToBot(answerText, uploadedFileUrls);
       return;
     }
 
@@ -506,13 +597,19 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
     setPendingFiles([]);
     setMessageCounter(currentMessageCounter);
 
-    // Auto-resize textarea
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
+    // Reset textarea to normal size
+    resetTextareaSize();
+
+    // Show typing indicator IMMEDIATELY after sending message
+    setIsTyping(true);
+    setTypingMessage(getTypingMessage());
+    console.log('Typing indicator shown'); // Debug log
 
     // Simulate bot response
     setTimeout(() => {
+      setIsTyping(false); // Hide typing indicator
+      console.log('Typing indicator hidden'); // Debug log
+      
       const botResponse: ChatMessage = {
         id: currentMessageCounter,
         type: 'bot',
@@ -531,7 +628,7 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
 
       setChatMessages(prev => [...prev, botResponse]);
       setTimelineEntries(prev => [...prev, botTimelineEntry]);
-    }, 1000);
+    }, 1200); // Reduced to 1.2 seconds for faster response
   };
 
   // Live Speech Recognition Handler
@@ -549,19 +646,30 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
       recognition.interimResults = true;
       recognition.lang = 'en-US';
 
-      let finalTranscript = '';
+      // Preserve existing message content instead of starting fresh
+      const existingMessage = message;
+      let sessionTranscript = '';
 
       recognition.onresult = (event: any) => {
         let interimTranscript = '';
+        sessionTranscript = ''; // Reset session transcript for this result
+        
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           const transcript = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            finalTranscript += transcript;
+            sessionTranscript += transcript;
           } else {
             interimTranscript += transcript;
           }
         }
-        setMessage(finalTranscript + interimTranscript);
+        
+        // Combine existing message + session final transcript + current interim
+        const combinedMessage = existingMessage + 
+          (existingMessage && sessionTranscript ? ' ' : '') + 
+          sessionTranscript + 
+          (interimTranscript ? (existingMessage || sessionTranscript ? ' ' : '') + interimTranscript : '');
+          
+        setMessage(combinedMessage);
       };
 
       recognition.onerror = (event: any) => {
@@ -572,6 +680,13 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
 
       recognition.onend = () => {
         setIsRecording(false);
+        // When recognition ends, finalize the session transcript to the message
+        if (sessionTranscript) {
+          const finalMessage = existingMessage + 
+            (existingMessage ? ' ' : '') + 
+            sessionTranscript;
+          setMessage(finalMessage);
+        }
       };
 
       recognition.start();
@@ -1008,6 +1123,50 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
                 </div>
               </div>
             ))}
+            
+            {/* Typing Indicator */}
+            {isTyping && (
+              <div className="max-w-full flex items-start gap-2 self-start flex-row animate-fadeIn">
+                {/* Bot Avatar */}
+                <div className="flex-shrink-0 mt-0.5">
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center border-2 border-white shadow-md bg-white">
+                    <img src="/favicon.svg" alt="Certainti Logo" className="w-5 h-5" />
+                  </div>
+                </div>
+                {/* Typing Bubble */}
+                <div className="flex flex-col min-w-0 flex-1 max-w-[80%]">
+                  <div className="p-3 rounded-xl text-base shadow-sm border bg-gray-100 border-gray-200 text-gray-700 rounded-tl-sm max-w-fit">
+                    <div className="flex items-center gap-3">
+                      <span 
+                        className="text-gray-600 text-sm font-medium" 
+                        style={{ 
+                          animation: 'processingPulse 1.6s ease-in-out infinite' 
+                        }}
+                      >
+                        Processing...
+                      </span>
+                      <div className="flex gap-1">
+                        <div className="w-2 h-2 rounded-full" style={{ 
+                          backgroundColor: 'rgba(45,62,79,255)', 
+                          animation: 'dotPulse 1.6s ease-in-out infinite',
+                          animationDelay: '0ms'
+                        }}></div>
+                        <div className="w-2 h-2 rounded-full" style={{ 
+                          backgroundColor: 'rgba(45,62,79,255)', 
+                          animation: 'dotPulse 1.6s ease-in-out infinite',
+                          animationDelay: '200ms'
+                        }}></div>
+                        <div className="w-2 h-2 rounded-full" style={{ 
+                          backgroundColor: 'rgba(45,62,79,255)', 
+                          animation: 'dotPulse 1.6s ease-in-out infinite',
+                          animationDelay: '400ms'
+                        }}></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Input Area */}
@@ -1099,14 +1258,14 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
               onClick={handleSend}
               disabled={
                 chatSession.isLoading || 
-                (chatSession.isActive && chatSession.currentQuestion && !message.trim()) ||
+                (chatSession.isActive && chatSession.currentQuestion && !message.trim() && pendingFiles.length === 0) ||
                 (!chatSession.isActive && !message.trim() && pendingFiles.length === 0)
               }
               className="w-10 h-10 flex items-center justify-center text-white rounded-lg disabled:cursor-not-allowed transition-colors"
               style={{ 
                 backgroundColor: (
                   chatSession.isLoading || 
-                  (chatSession.isActive && chatSession.currentQuestion && !message.trim()) ||
+                  (chatSession.isActive && chatSession.currentQuestion && !message.trim() && pendingFiles.length === 0) ||
                   (!chatSession.isActive && !message.trim() && pendingFiles.length === 0)
                 ) ? '#d1d5db' : '#f2603b'
               }}
