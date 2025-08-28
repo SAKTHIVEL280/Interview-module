@@ -41,7 +41,9 @@ const Index = () => {
   const [messageCounter, setMessageCounter] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  const [leftPanelWidth, setLeftPanelWidth] = useState(400); // Default fixed size
+  const [leftPanelWidth, setLeftPanelWidth] = useState(50); // Default 50% (1:1 ratio)
+  const [isLayoutInitialized, setIsLayoutInitialized] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   
   // Q-Bot specific state
   const [chatSession, setChatSession] = useState({
@@ -663,23 +665,28 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
     }
   }, [isLoading, projectData, error, chatSession.isStarted]);
 
-  // Handle window resize to maintain proper panel sizing
+  // Initialize layout to ensure 1:1 ratio on mount and project changes
   useEffect(() => {
-    const DEFAULT_LEFT_WIDTH = 400;
+    setIsLayoutInitialized(false);
+    setLeftPanelWidth(50); // Force 50% (1:1 ratio)
+    
+    // Small delay to ensure DOM is ready, then mark as initialized
+    const timer = setTimeout(() => {
+      setIsLayoutInitialized(true);
+    }, 50);
+    
+    return () => clearTimeout(timer);
+  }, [PROJECT_ID]);
+
+  // Handle window resize to keep the left width within reasonable bounds
+  useEffect(() => {
     const handleResize = () => {
-      const minRightPanelWidth = Math.max(320, window.innerWidth * 0.25); // At least 25% of screen or 320px
-      const maxLeftWidth = window.innerWidth - minRightPanelWidth;
-      setLeftPanelWidth(prevWidth => {
-        if (prevWidth > maxLeftWidth) {
-          return maxLeftWidth;
-        } else if (prevWidth < DEFAULT_LEFT_WIDTH) {
-          return DEFAULT_LEFT_WIDTH;
-        }
-        return prevWidth;
-      });
+      // Keep current percentage-based width, just ensure it's within bounds
+      const minPercent = 25; // Minimum 25%
+      const maxPercent = 75; // Maximum 75%
+      setLeftPanelWidth(prev => Math.min(Math.max(prev, minPercent), maxPercent));
     };
 
-    handleResize(); // Call on mount
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -690,11 +697,16 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
       <TopNavBar projectId={PROJECT_ID} />
 
       {/* Main Content Area */}
-      <div className="flex h-full overflow-hidden">
+      <div ref={containerRef} className="flex h-full overflow-hidden">
         {/* Left Panel - Context Timeline */}
         <div 
           className="relative flex flex-col bg-white shadow-lg overflow-hidden"
-          style={{ width: `${leftPanelWidth}px`, minWidth: '400px', maxWidth: `${window.innerWidth - Math.max(320, window.innerWidth * 0.25)}px` }}
+          style={{ 
+            width: `${isLayoutInitialized ? leftPanelWidth : 50}%`,
+            minWidth: '25%',
+            maxWidth: '75%',
+            transition: isLayoutInitialized ? 'none' : 'width 0.1s ease'
+          }}
         >
           <div className="w-full h-full border-r-0 flex flex-col bg-white shadow-lg overflow-hidden">
             {/* Fixed Conversation Summary Card */}
@@ -767,18 +779,23 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
             onMouseDown={(e) => {
               e.preventDefault();
               const startX = e.clientX;
-              const startWidth = leftPanelWidth;
+              const startWidthPercent = leftPanelWidth;
+              const containerWidth = containerRef.current?.clientWidth || window.innerWidth;
               
               // Add body class to prevent text selection
               document.body.classList.add('resizing');
               
               const handleMouseMove = (e: MouseEvent) => {
-                const newWidth = startWidth + (e.clientX - startX);
-                const minWidth = 400;
-                const maxWidth = window.innerWidth - Math.max(320, window.innerWidth * 0.25);
+                const deltaX = e.clientX - startX;
+                const deltaPercent = (deltaX / containerWidth) * 100;
+                const newWidthPercent = startWidthPercent + deltaPercent;
                 
-                if (newWidth >= minWidth && newWidth <= maxWidth) {
-                  setLeftPanelWidth(newWidth);
+                // Set bounds: minimum 25%, maximum 75%
+                const minPercent = 25;
+                const maxPercent = 75;
+                
+                if (newWidthPercent >= minPercent && newWidthPercent <= maxPercent) {
+                  setLeftPanelWidth(newWidthPercent);
                 }
               };
               
@@ -795,7 +812,13 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
         </div>
 
         {/* Right Panel - Chat Area */}
-        <div className="flex-grow h-full flex flex-col bg-white shadow-lg min-w-0 overflow-hidden">
+        <div 
+          className="flex-grow h-full flex flex-col bg-white shadow-lg min-w-0 overflow-hidden"
+          style={{
+            width: `${isLayoutInitialized ? (100 - leftPanelWidth) : 50}%`,
+            transition: isLayoutInitialized ? 'none' : 'width 0.1s ease'
+          }}
+        >
           {/* Chat Messages */}
           <div 
             ref={chatMessagesRef}

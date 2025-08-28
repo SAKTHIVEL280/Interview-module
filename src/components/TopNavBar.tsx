@@ -11,7 +11,7 @@ const TopNavBar: React.FC<TopNavBarProps> = ({ projectId }) => {
   // Show loading state
   if (isLoading) {
     return (
-      <div className="w-full shadow-lg border-0 flex items-center z-10" style={{ backgroundColor: 'rgba(45,62,79,255)', minHeight: '64px', fontFamily: 'Inter, Segoe UI, Arial, sans-serif', padding: '0' }}>
+      <div className="w-full shadow-lg border-0 flex items-center z-10" style={{ backgroundColor: 'rgba(45,62,79,255)', minHeight: '64px', fontFamily: 'Lexend, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif', padding: '0' }}>
         <div className="flex items-center justify-center w-full">
           <span className="text-white text-sm">Loading project data...</span>
         </div>
@@ -26,7 +26,7 @@ const TopNavBar: React.FC<TopNavBarProps> = ({ projectId }) => {
     const backgroundColor = isProjectNotFound ? 'rgba(239,68,68,255)' : 'rgba(139,69,19,255)';
     
     return (
-      <div className="w-full shadow-lg border-0 flex items-center z-10" style={{ backgroundColor, minHeight: '64px', fontFamily: 'Inter, Segoe UI, Arial, sans-serif', padding: '0' }}>
+      <div className="w-full shadow-lg border-0 flex items-center z-10" style={{ backgroundColor, minHeight: '64px', fontFamily: 'Lexend, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif', padding: '0' }}>
         <div className="flex items-center justify-center w-full gap-4">
           <div className="flex flex-col items-center text-center">
             <span className="text-white text-sm font-medium">
@@ -65,70 +65,182 @@ const TopNavBar: React.FC<TopNavBarProps> = ({ projectId }) => {
   };
 
   return (
-    <div className="w-full shadow-lg border-0 flex items-center z-10" style={{ backgroundColor: 'rgba(45,62,79,255)', minHeight: '64px', fontFamily: 'Inter, Segoe UI, Arial, sans-serif', padding: '0' }}>
-      <div
-        className="grid"
-        style={{
-          gridTemplateColumns: 'repeat(5, 1fr)',
-          gridTemplateRows: 'repeat(2, auto)',
-          gap: 'min(10px, 1vw)',
-          width: '100%',
-          maxWidth: '100vw',
-          alignItems: 'start',
-          fontSize: 'clamp(9px, 1.2vw, 13px)',
-          margin: '0 auto',
-          padding: 'min(10px, 2vw)',
-          boxSizing: 'border-box',
-          minWidth: 0,
-          overflow: 'hidden',
-        }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0, overflow: 'hidden' }}>
-          <span style={{ fontSize: 'clamp(8px, 1vw, 11px)', color: '#e5e7eb', fontWeight: 500, marginBottom: 2, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Project Id</span>
-          <span style={{ fontSize: 'clamp(10px, 1.3vw, 13px)', color: '#ffffff', fontWeight: 700, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{data.projectId}</span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0, overflow: 'hidden' }}>
-          <span style={{ fontSize: 'clamp(8px, 1vw, 11px)', color: '#e5e7eb', fontWeight: 500, marginBottom: 2, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Project Number</span>
-          <span style={{ fontSize: 'clamp(10px, 1.3vw, 13px)', color: '#ffffff', fontWeight: 700, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{data.projectNumber}</span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0, overflow: 'hidden' }}>
-          <span style={{ fontSize: 'clamp(8px, 1vw, 11px)', color: '#e5e7eb', fontWeight: 500, marginBottom: 2, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Project Ref Id</span>
-          <span style={{ fontSize: 'clamp(10px, 1.3vw, 13px)', color: '#ffffff', fontWeight: 700, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{data.projectRefId}</span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0, overflow: 'hidden' }}>
-          <span style={{ fontSize: 'clamp(8px, 1vw, 11px)', color: '#e5e7eb', fontWeight: 500, marginBottom: 2, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Account ID</span>
-          <span style={{ fontSize: 'clamp(10px, 1.3vw, 13px)', color: '#ffffff', fontWeight: 700, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{data.accountId}</span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0, overflow: 'hidden' }}>
-          <span style={{ fontSize: 'clamp(8px, 1vw, 11px)', color: '#e5e7eb', fontWeight: 500, marginBottom: 2, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Account Name</span>
-          <span style={{ fontSize: 'clamp(10px, 1.3vw, 13px)', color: '#ffffff', fontWeight: 700, whiteSpace: 'normal', wordBreak: 'break-word', overflow: 'hidden', display: 'block', lineHeight: 1.2, maxHeight: '2.5em' }}>{data.accountName}</span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0, overflow: 'hidden' }}>
-          <span style={{ fontSize: 'clamp(8px, 1vw, 11px)', color: '#e5e7eb', fontWeight: 500, marginBottom: 2, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Country</span>
-          <span style={{ fontSize: 'clamp(10px, 1.3vw, 13px)', color: '#ffffff', fontWeight: 700, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{data.country}</span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0, overflow: 'hidden' }}>
-          <span style={{ fontSize: 'clamp(8px, 1vw, 11px)', color: '#e5e7eb', fontWeight: 500, marginBottom: 2, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Currency</span>
-          <span style={{ fontSize: 'clamp(10px, 1.3vw, 13px)', color: '#ffffff', fontWeight: 700, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{data.currency}</span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0, overflow: 'hidden' }}>
-          <span style={{ fontSize: 'clamp(8px, 1vw, 11px)', color: '#e5e7eb', fontWeight: 500, marginBottom: 2, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Industry</span>
-          <span style={{ fontSize: 'clamp(10px, 1.3vw, 13px)', color: '#ffffff', fontWeight: 700, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{data.industry}</span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0, overflow: 'hidden' }}>
-          <span style={{ fontSize: 'clamp(8px, 1vw, 11px)', color: '#e5e7eb', fontWeight: 500, marginBottom: 2, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Program Name</span>
-          <span style={{ fontSize: 'clamp(10px, 1.3vw, 13px)', color: '#ffffff', fontWeight: 700, whiteSpace: 'normal', wordBreak: 'break-word', overflow: 'hidden', display: 'block', lineHeight: 1.2, maxHeight: '2.5em' }}>{data.programName}</span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0, overflow: 'hidden' }}>
-          <span style={{ fontSize: 'clamp(8px, 1vw, 11px)', color: '#e5e7eb', fontWeight: 500, marginBottom: 2, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Status</span>
-          <span style={{ 
-            fontSize: 'clamp(10px, 1.3vw, 13px)', 
-            color: data.status?.toLowerCase() === 'active' ? '#4ade80' : '#ffffff', 
-            fontWeight: 800, 
-            whiteSpace: 'nowrap', 
-            textOverflow: 'ellipsis', 
-            overflow: 'hidden' 
-          }}>{data.status}</span>
+    <div className="w-full shadow-lg border-0 flex items-center z-10" style={{ backgroundColor: 'rgba(45,62,79,255)', minHeight: '80px', fontFamily: 'Lexend, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif', padding: '0' }}>
+      <div style={{ 
+        width: '100%', 
+        maxWidth: '100vw', 
+        margin: '0 auto', 
+        padding: '16px 24px', 
+        boxSizing: 'border-box' 
+      }}>
+        {/* Main Container with proper spacing */}
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: '12px' 
+        }}>
+          {/* Top Row: Project ID and Project Name positioned above Account ID */}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: '1fr 1fr 1fr 1fr', 
+            gap: '24px'
+          }}>
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: 'column'
+            }}>
+              <span style={{ 
+                fontSize: '9px', 
+                color: '#94a3b8', 
+                fontWeight: 500,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                marginBottom: '3px'
+              }}>
+                Project ID
+              </span>
+              <span style={{ 
+                fontSize: '13px', 
+                color: '#ffffff', 
+                fontWeight: 600,
+                lineHeight: '1.2'
+              }}>
+                {data.projectId}
+              </span>
+            </div>
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: 'column'
+            }}>
+              <span style={{ 
+                fontSize: '9px', 
+                color: '#94a3b8', 
+                fontWeight: 500,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                marginBottom: '3px'
+              }}>
+                Project Name
+              </span>
+              <span style={{ 
+                fontSize: '13px', 
+                color: '#e2e8f0', 
+                fontWeight: 600,
+                lineHeight: '1.2',
+                textOverflow: 'ellipsis',
+                overflow: 'hidden',
+                whiteSpace: 'nowrap'
+              }}>
+                {data.programName}
+              </span>
+            </div>
+            <div></div>
+            <div></div>
+          </div>
+          
+          {/* Bottom Row: Remaining details */}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: '1fr 1fr 1fr 1fr', 
+            gap: '24px',
+            marginTop: '4px'
+          }}>
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: 'column'
+            }}>
+              <span style={{ 
+                fontSize: '9px', 
+                color: '#94a3b8', 
+                fontWeight: 500,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                marginBottom: '3px'
+              }}>
+                Project Number
+              </span>
+              <span style={{ 
+                fontSize: '13px', 
+                color: '#e2e8f0', 
+                fontWeight: 600,
+                lineHeight: '1.2'
+              }}>
+                {data.projectNumber}
+              </span>
+            </div>
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: 'column'
+            }}>
+              <span style={{ 
+                fontSize: '9px', 
+                color: '#94a3b8', 
+                fontWeight: 500,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                marginBottom: '3px'
+              }}>
+                Account ID
+              </span>
+              <span style={{ 
+                fontSize: '13px', 
+                color: '#e2e8f0', 
+                fontWeight: 600,
+                lineHeight: '1.2'
+              }}>
+                {data.accountId}
+              </span>
+            </div>
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: 'column'
+            }}>
+              <span style={{ 
+                fontSize: '9px', 
+                color: '#94a3b8', 
+                fontWeight: 500,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                marginBottom: '3px'
+              }}>
+                Account Name
+              </span>
+              <span style={{ 
+                fontSize: '13px', 
+                color: '#e2e8f0', 
+                fontWeight: 600,
+                lineHeight: '1.2',
+                textOverflow: 'ellipsis',
+                overflow: 'hidden',
+                whiteSpace: 'nowrap'
+              }}>
+                {data.accountName}
+              </span>
+            </div>
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: 'column'
+            }}>
+              <span style={{ 
+                fontSize: '9px', 
+                color: '#94a3b8', 
+                fontWeight: 500,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                marginBottom: '3px'
+              }}>
+                Country
+              </span>
+              <span style={{ 
+                fontSize: '13px', 
+                color: '#e2e8f0', 
+                fontWeight: 600,
+                lineHeight: '1.2'
+              }}>
+                {data.country}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
