@@ -279,27 +279,111 @@ class Questionnaire:
     
     def validate_answer(self, question, user_answer, summary_content):
         """Validate if the user's answer is relevant and correct"""
-        validation_prompt = f"""
-        Given the following context and question:
         
+        # Pre-validation checks
+        if not user_answer or len(user_answer.strip()) < 1:
+            return "INVALID: Empty or too short answer"
+        
+        # Clean the user answer
+        clean_answer = user_answer.strip().lower()
+        
+        # Check for non-informative answers
+        non_informative = ['i dont know', 'i don\'t know', 'idk', 'not sure', 'no idea', 'dont know', 'no', 'yes', 'maybe', 'unknown']
+        if clean_answer in non_informative or len(clean_answer) < 2:
+            return "INVALID: Answer is too vague or uninformative"
+        
+        validation_prompt = f"""
+        You are a smart validation system for interview answers. Your job is to determine if the user's answer is valid and informative.
+
         CONTEXT/SUMMARY: {summary_content}
         QUESTION: {question}
         USER ANSWER: {user_answer}
         
-        Please evaluate if the user's answer is:
-        1. Relevant to the specific question asked
-        2. Reasonable and makes sense in the context
-        3. Addresses what the question is asking for
-        4. Is a plausible answer even if not explicitly mentioned in the context
+        VALIDATION CRITERIA:
         
-        IMPORTANT: The context is just stating that the person knows certain information, but doesn't provide the actual details. The user's job is to PROVIDE those missing details. So if the context says "I know what food he likes, it's an Indian dish" and the question asks "What kind of food does Naveen like?" then ANY reasonable Indian dish name should be VALID.
+        1. RELEVANCE CHECK:
+           - Does the answer directly address what the question is asking?
+           - Is it related to the topic/subject in the question?
+           
+        2. INFORMATIVENESS CHECK:
+           - Does the answer provide meaningful, specific information?
+           - Is it more than just "yes/no" or vague responses?
+           - Does it add value to understanding the topic?
+           
+        3. CONTEXT COMPATIBILITY:
+           - The context might mention general knowledge (like "I know what food he likes")
+           - The user's job is to provide the SPECIFIC details that fill in the gaps
+           - Accept reasonable answers that could logically fit the context
+           - Don't require exact matches - accept plausible variations
+           
+        4. REALISTIC CHECK:
+           - Is the answer believable and realistic?
+           - For names: accept any reasonable name
+           - For preferences: accept reasonable options in that category
+           - For facts: accept plausible information
+           
+        EXAMPLES OF GOOD VALIDATION:
+        - Question: "What food does Naveen like?" Answer: "idli with sambar" → VALID (specific Indian dish)
+        - Question: "What's his favorite cricket team?" Answer: "csk" → VALID (known cricket team)
+        - Question: "What's his favorite number?" Answer: "42069" → VALID (specific number)
         
-        Be generous in validation - accept reasonable answers that fit the context type, don't require exact matches.
+        EXAMPLES OF BAD VALIDATION:
+        - Answer: "I don't know" → INVALID (not informative)
+        - Answer: "yes" → INVALID (doesn't answer the question)
+        - Answer: "food" → INVALID (too vague)
+        - Answer: "something" → INVALID (uninformative)
         
-        Respond with either "VALID: [brief explanation]" or "INVALID: [brief explanation of why it's wrong]"
+        INSTRUCTIONS:
+        - Be reasonably strict about informativeness (reject vague answers)
+        - Be generous about variations (accept different ways of saying the same thing)
+        - Focus on whether the answer actually provides useful information
+        - Consider if this answer would help someone understand the topic better
+        
+        Respond with either:
+        "VALID: [brief explanation of why it's acceptable]" 
+        OR 
+        "INVALID: [specific reason why it's not acceptable]"
         """
         
         return self.call_gemini_api(validation_prompt)
+    
+    def validate_answer_with_confidence(self, question, user_answer, summary_content):
+        """Enhanced validation with confidence scoring"""
+        primary_validation = self.validate_answer(question, user_answer, summary_content)
+        
+        if not primary_validation:
+            return "INVALID: Validation failed due to API error"
+        
+        # If primary validation says INVALID, do a secondary check for confidence
+        if primary_validation.upper().startswith("INVALID"):
+            secondary_prompt = f"""
+            This is a secondary validation check. The primary validator rejected this answer, but let's double-check.
+            
+            QUESTION: {question}
+            USER ANSWER: {user_answer}
+            CONTEXT: {summary_content}
+            PRIMARY REJECTION: {primary_validation}
+            
+            Re-evaluate this answer with these considerations:
+            1. Is the answer specific and informative (not vague like "yes/no/maybe")?
+            2. Does it directly address what the question asks?
+            3. Is it a realistic/believable answer?
+            4. Would this answer help complete the missing information in the context?
+            
+            Sometimes the primary validator is too strict. If this answer provides meaningful, specific information that addresses the question, it should be VALID even if it's not perfect.
+            
+            ONLY respond with "OVERRIDE_VALID: [reason]" if you believe the primary validator was wrong and this is actually a good answer.
+            Otherwise respond with "CONFIRM_INVALID: [reason]"
+            """
+            
+            secondary_validation = self.call_gemini_api(secondary_prompt)
+            
+            if secondary_validation and secondary_validation.upper().startswith("OVERRIDE_VALID"):
+                return f"VALID: {secondary_validation[15:]}"  # Remove "OVERRIDE_VALID: " prefix
+            else:
+                return primary_validation  # Keep original invalid decision
+        
+        return primary_validation
     
     def save_answer(self, question, answer):
         """Save valid answer to the answers file"""
@@ -322,7 +406,7 @@ class Questionnaire:
         answers_text = "\n".join([f"- {qa['question']}: {qa['answer']}" for qa in collected_answers])
         
         enhancement_prompt = f"""
-        You must create an enhanced summary by combining ONLY the original summary with the user's specific answers. Do NOT add any external knowledge or information that wasn't provided.
+        You are updating a project summary by weaving the user's specific answers DIRECTLY into the existing content. DO NOT add new sections - only enhance what's already there.
 
         ORIGINAL SUMMARY:
         {original_summary}
@@ -330,25 +414,37 @@ class Questionnaire:
         USER'S ANSWERS TO QUESTIONS:
         {answers_text}
 
-        STRICT INSTRUCTIONS:
-        do's :
-        1. Keep the EXACT same format as the original summary - each piece of information on separate lines
-        2. Replace the general statements with specific information from the user's answers
-        3. Do NOT combine multiple lines into paragraphs
-        4. Do NOT add any external knowledge, facts, or information not mentioned by the user
-        5. Do NOT elaborate beyond what the user actually said
-        6. Keep the same simple, direct style as the original
-        7. Add the user's information (the answers) where it's relevant in the original summary
-        8. ADD PROPER PUNCTUATION AND GRAMMAR - fix missing periods, commas, and capitalization to make it grammatically correct
-        9. Check for spelling mistake and correct them based on context
-        10. add the user's answer like it was meant to be there in original summary like it was always part of it.
+        CRITICAL TASK:
+        Go through the original summary line by line. For each line, check if any of the user's answers can replace vague statements with specific details. If yes, replace that line with the specific information. If no relevant answer exists, keep the original line unchanged.
 
-        don'ts :
-        1. do not add additional information that wasn't provided by the user
-        2. do not add the text "the user said" or similar phrases
-        3. do not add the answers and questions as a list or separate section - integrate them into the summary naturally
+        INTEGRATION RULES:
+        1. NEVER add new sections like "More details:" or "Additional information:"
+        2. NEVER append content at the end - only modify existing lines
+        3. Replace incomplete statements with specific details from answers
+        4. Keep the EXACT same line-by-line format
+        5. Maintain the casual, personal writing style
+        6. Fix grammar and spelling while keeping the natural tone
+        
+        REPLACEMENT EXAMPLES:
+        Original line: "i know what food he likes its an indian dish"
+        If answer mentions: "naveen likes idli with sambar"
+        Replace with: "naveen likes idli with sambar"
+        
+        Original line: "i know what his favourite team in cricket"
+        If answer mentions: "his favourite cricket team is csk"  
+        Replace with: "his favourite cricket team is csk"
+        
+        Original line: "he studies computer science"
+        If no relevant answer exists: keep unchanged: "he studies computer science"
 
-        maintain the same structure as the original, but make it grammatically correct with proper punctuation.
+        FORBIDDEN ACTIONS:
+        - Adding new sections or headers
+        - Appending content after the original summary
+        - Using phrases like "More details about..." or "Additional information:"
+        - Adding formal language or "I know" statements
+        - Changing the overall structure or number of main points
+
+        Output ONLY the enhanced version of the original summary with specific details woven in where appropriate. Nothing more, nothing less.
         """
         
         enhanced_summary = self.call_gemini_api(enhancement_prompt)
@@ -365,7 +461,8 @@ class Questionnaire:
         enhanced = original_summary
         
         if collected_answers:
-            enhanced += "\n\nAdditional information gathered:\n"
+            # Simple integration without formal language
+            enhanced += "\n\nMore details:\n"
             for qa in collected_answers:
                 enhanced += f"- {qa['question']}: {qa['answer']}\n"
         
@@ -540,8 +637,8 @@ class Questionnaire:
                 # Handle current question
                 if current_answered_correctly:
                     print("CORRECT: Answer addresses the current question!")
-                    validation = self.validate_answer(question, user_answer, summary_content)
-                    print(f"VALIDATION: {validation}")  # Show validation reason
+                    validation = self.validate_answer_with_confidence(question, user_answer, summary_content)
+                    print(f"VALIDATION RESULT: {validation}")  # Show detailed validation reason
                     
                     if validation and validation.upper().startswith("VALID"):
                         # Current question answered correctly
@@ -553,11 +650,12 @@ class Questionnaire:
                         correctly_answered.add(current_question_idx)
                         # Remove from incorrectly answered if it was there
                         incorrectly_answered.discard(current_question_idx)
-                        print("ACCEPTED: Current question answer accepted and stored!")
+                        print("✅ ACCEPTED: Current question answer validated and stored!")
                     else:
-                        print("INVALID: Answer not valid for current question.")
+                        print("❌ REJECTED: Answer failed validation.")
+                        print(f"   Reason: {validation}")
                         incorrectly_answered.add(current_question_idx)
-                        print(f"RETRY: Question {current_question_idx+1} marked for re-asking")
+                        print(f"🔄 RETRY: Question {current_question_idx+1} will be asked again")
                 else:
                     # Current question not answered or answered incorrectly
                     print("INCORRECT: Answer doesn't address the current question correctly.")
@@ -570,8 +668,8 @@ class Questionnaire:
                     for q_idx, extracted_answer in other_answers:
                         if q_idx not in correctly_answered:  # Only process if not already correctly answered
                             # Validate the extracted answer
-                            other_validation = self.validate_answer(questions[q_idx], extracted_answer, summary_content)
-                            print(f"VALIDATION for Question {q_idx+1}: {other_validation}")  # Show validation reason
+                            other_validation = self.validate_answer_with_confidence(questions[q_idx], extracted_answer, summary_content)
+                            print(f"📝 VALIDATION Q{q_idx+1}: {other_validation}")
                             
                             if other_validation and other_validation.upper().startswith("VALID"):
                                 self.collected_answers.append({
@@ -582,9 +680,10 @@ class Questionnaire:
                                 correctly_answered.add(q_idx)
                                 # Remove from incorrectly answered if it was there
                                 incorrectly_answered.discard(q_idx)
-                                print(f"AUTO-ANSWERED: Question {q_idx+1} automatically answered correctly: {questions[q_idx][:50]}...")
+                                print(f"🎯 AUTO-ANSWERED: Q{q_idx+1} - '{extracted_answer}' → {questions[q_idx][:50]}...")
                             else:
-                                print(f"INVALID: Extracted answer for Question {q_idx+1} is invalid")
+                                print(f"❌ REJECTED: Q{q_idx+1} extracted answer failed validation")
+                                print(f"   Answer: '{extracted_answer}' → {other_validation}")
                                 incorrectly_answered.add(q_idx)
             else:
                 print("ERROR: Could not analyze answer properly.")
@@ -785,7 +884,7 @@ class Questionnaire:
             
             # Handle current question
             if current_answered_correctly:
-                validation = self.validate_answer(question, user_answer, self.current_session['summary_content'])
+                validation = self.validate_answer_with_confidence(question, user_answer, self.current_session['summary_content'])
                 
                 if validation and validation.upper().startswith("VALID"):
                     # Current question answered correctly
@@ -810,7 +909,7 @@ class Questionnaire:
                 for q_idx, extracted_answer in other_answers:
                     if q_idx not in self.current_session['correctly_answered']:
                         # Validate the extracted answer
-                        other_validation = self.validate_answer(
+                        other_validation = self.validate_answer_with_confidence(
                             questions[q_idx], extracted_answer, self.current_session['summary_content']
                         )
                         
@@ -829,7 +928,7 @@ class Questionnaire:
                             })
         else:
             # If multi-analysis failed, fall back to simple validation
-            validation = self.validate_answer(question, user_answer, self.current_session['summary_content'])
+            validation = self.validate_answer_with_confidence(question, user_answer, self.current_session['summary_content'])
             
             if validation and validation.upper().startswith("VALID"):
                 self.collected_answers.append({
