@@ -14,6 +14,16 @@ export interface ProjectData {
   summary?: string;
 }
 
+export interface ContextHistoryEntry {
+  id: number;
+  type: 'user' | 'bot';
+  text: string;
+  timestamp: string;
+  date: string;
+  files?: Array<{url: string, name: string}>;
+  sessionId?: string;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
@@ -83,6 +93,126 @@ export const fetchProjectData = async (projectId: string): Promise<ProjectData> 
     }
     
     // Re-throw the error with the same message if it's already user-friendly
+    throw error;
+  }
+};
+
+// Context History API functions
+export const fetchContextHistory = async (projectId: string): Promise<ContextHistoryEntry[]> => {
+  try {
+    console.log(`Fetching context history for project ID: ${projectId}`);
+    const response = await fetch(`${API_BASE_URL}/api/context-history/${projectId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        // No context history found is not an error, return empty array
+        return [];
+      }
+      throw new Error(`Failed to fetch context history: ${response.status}`);
+    }
+    
+    const result: ApiResponse<ContextHistoryEntry[]> = await response.json();
+    
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to fetch context history');
+    }
+    
+    return result.data || [];
+  } catch (error) {
+    console.error('Error fetching context history:', error);
+    
+    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+      throw new Error('Cannot connect to the server. Please ensure the server is running.');
+    }
+    
+    throw error;
+  }
+};
+
+export const saveContextHistory = async (
+  projectId: string, 
+  messageType: 'user' | 'bot', 
+  messageText: string, 
+  files?: Array<{url: string, name: string}>,
+  sessionId?: string
+): Promise<number> => {
+  try {
+    console.log(`Saving context history for project ${projectId}: ${messageType} message`);
+    const response = await fetch(`${API_BASE_URL}/api/context-history`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        projectId,
+        messageType,
+        messageText,
+        files,
+        sessionId
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to save context history: ${response.status}`);
+    }
+    
+    const result: ApiResponse<{id: number}> = await response.json();
+    
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to save context history');
+    }
+    
+    return result.data?.id || 0;
+  } catch (error) {
+    console.error('Error saving context history:', error);
+    
+    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+      throw new Error('Cannot connect to the server. Please ensure the server is running.');
+    }
+    
+    throw error;
+  }
+};
+
+export const clearContextHistory = async (projectId: string): Promise<number> => {
+  try {
+    console.log(`Clearing context history for project ID: ${projectId}`);
+    const response = await fetch(`${API_BASE_URL}/api/context-history/${projectId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to clear context history: ${response.status}`);
+    }
+    
+    const result: ApiResponse<{deletedCount: number}> = await response.json();
+    
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to clear context history');
+    }
+    
+    return result.data?.deletedCount || 0;
+  } catch (error) {
+    console.error('Error clearing context history:', error);
+    
+    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+      throw new Error('Cannot connect to the server. Please ensure the server is running.');
+    }
+    
     throw error;
   }
 };

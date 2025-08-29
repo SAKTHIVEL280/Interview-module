@@ -5,14 +5,8 @@ import { useParams } from 'react-router-dom';
 import TopNavBar from '@/components/TopNavBar';
 import ProjectSummary from '@/components/ProjectSummary';
 import { useProjectData } from '@/hooks/use-project-data';
-
-interface TimelineEntry {
-  id: number;
-  type: 'user' | 'bot';
-  text: string;
-  timestamp: string;
-  date: string;
-}
+import { useContextHistory } from '@/hooks/use-context-history';
+import { useAnsweredQuestions } from '@/hooks/use-answered-questions';
 
 interface ChatMessage {
   id: number;
@@ -35,9 +29,26 @@ const Index = () => {
   // Load project data to ensure it's available before starting chat
   const { projectData, isLoading, error } = useProjectData(PROJECT_ID);
   
+  // Load and manage context history from database
+  const { 
+    contextHistory: timelineEntries, 
+    isLoading: isContextLoading, 
+    addContextEntry,
+    error: contextError 
+  } = useContextHistory(PROJECT_ID);
+  
+  // Load and manage answered questions from database
+  const {
+    answeredQuestions,
+    answeredQuestionNumbers,
+    fetchAnsweredQuestions,
+    fetchAnsweredQuestionNumbers,
+    saveAnsweredQuestion,
+    summary: answeredQuestionsSummary
+  } = useAnsweredQuestions();
+  
   const [message, setMessage] = useState('');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[]>([]);
   const [messageCounter, setMessageCounter] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -205,6 +216,58 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
     }
   }, [isTyping]);
 
+  // Load answered questions when PROJECT_ID changes
+  useEffect(() => {
+    if (PROJECT_ID) {
+      fetchAnsweredQuestions(PROJECT_ID);
+    }
+  }, [PROJECT_ID, fetchAnsweredQuestions]);
+
+  // Clean up duplicate entries in context history
+  const cleanupDuplicateEntries = async () => {
+    if (timelineEntries.length <= 1) return;
+    
+    // Check if there are consecutive duplicate bot messages
+    let hasDuplicates = false;
+    for (let i = 1; i < timelineEntries.length; i++) {
+      const current = timelineEntries[i];
+      const previous = timelineEntries[i - 1];
+      
+      if (current.type === 'bot' && 
+          previous.type === 'bot' && 
+          current.text === previous.text) {
+        hasDuplicates = true;
+        break;
+      }
+    }
+    
+    // Call backend to clean up duplicates if found
+    if (hasDuplicates) {
+      try {
+        console.log(`🧹 Cleaning up duplicate context entries for project ${PROJECT_ID}`);
+        const response = await fetch(`http://localhost:5000/api/context-history/${PROJECT_ID}/duplicates`, {
+          method: 'DELETE',
+        });
+        
+        const result = await response.json();
+        if (result.success && result.deletedCount > 0) {
+          console.log(`✅ Cleaned up ${result.deletedCount} duplicate entries`);
+          // Refresh the context history after cleanup
+          window.location.reload();
+        }
+      } catch (error) {
+        console.error('Error cleaning up duplicates:', error);
+      }
+    }
+  };
+
+  // Clean up duplicates when timeline entries change
+  useEffect(() => {
+    if (timelineEntries.length > 0) {
+      cleanupDuplicateEntries();
+    }
+  }, [timelineEntries]);
+
   const getCurrentTime = () => {
     const now = new Date();
     const hours = now.getHours() % 12 || 12;
@@ -230,6 +293,10 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
     setChatSession(prev => ({ ...prev, isLoading: true }));
     
     try {
+      // First, fetch answered questions to know the current state
+      console.log('Fetching answered questions for project:', PROJECT_ID);
+      await fetchAnsweredQuestions(PROJECT_ID);
+      
       console.log('Sending request to /api/chat/start...');
       const response = await fetch('http://localhost:5000/api/chat/start', {
         method: 'POST',
@@ -249,21 +316,13 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
           isActive: true,
           isStarted: true,
           totalQuestions: data.total_questions,
+          answeredQuestions: data.answered_questions || 0,
+          remainingQuestions: data.remaining_questions || data.total_questions,
           isLoading: false
         }));
         
-        // Add welcome message (but don't add to timeline)
-        const welcomeMessage: ChatMessage = {
-          id: Date.now(),
-          type: 'bot',
-          text: `Hello!`,
-          timestamp: getCurrentTime(),
-          date: getCurrentDate()
-        };
-        
-        setChatMessages([welcomeMessage]);
-        // Don't add welcome message to timeline - keep timeline empty initially
-        setTimelineEntries([]);
+        // Clear chat messages - no welcome message needed
+        setChatMessages([]);
         
         // Show typing indicator IMMEDIATELY and get first question
         setIsTyping(true);
@@ -363,16 +422,17 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
         
         setChatMessages(prev => [...prev, questionMessage]);
         
-        // Add question to timeline (context history)
-        const questionTimelineEntry: TimelineEntry = {
-          id: Date.now() + 1, // Ensure unique ID
-          type: 'bot',
-          text: questionText,
-          timestamp: getCurrentTime(),
-          date: getCurrentDate()
-        };
-        
-        setTimelineEntries(prev => [...prev, questionTimelineEntry]);
+        // Add question to timeline (context history) - save to database
+        // But only if it's not already the last entry to prevent duplicates
+        const shouldAddToHistory = timelineEntries.length === 0 || 
+          timelineEntries[timelineEntries.length - 1]?.text !== questionText ||
+          timelineEntries[timelineEntries.length - 1]?.type !== 'bot';
+          
+        if (shouldAddToHistory) {
+          await addContextEntry('bot', questionText);
+        } else {
+          console.log('🚫 Skipping duplicate question in context history');
+        }
       }
     } catch (error) {
       setIsTyping(false); // Hide typing indicator on error
@@ -401,15 +461,8 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
       const data = await response.json();
       
       if (data.success) {
-        // Add ALL answers to timeline (both correct and incorrect)
-        const timelineEntry: TimelineEntry = {
-          id: Date.now(),
-          type: 'user',
-          text: answer,
-          timestamp: getCurrentTime(),
-          date: getCurrentDate()
-        };
-        setTimelineEntries(prev => [...prev, timelineEntry]);
+        // Add ALL answers to timeline (both correct and incorrect) - save to database
+        await addContextEntry('user', answer);
         
         // Update progress
         setChatSession(prev => ({
@@ -601,16 +654,14 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
       files: uploadedFileUrls.length > 0 ? uploadedFileUrls : undefined
     };
 
-    const userTimelineEntry: TimelineEntry = {
-      id: currentMessageCounter + 1,
-      type: 'user',
-      text: message.trim() || `Uploaded ${uploadedFileUrls.length} file${uploadedFileUrls.length > 1 ? 's' : ''}: ${uploadedFileUrls.map(f => f.name).join(', ')}`,
-      timestamp: getCurrentTime(),
-      date: getCurrentDate()
-    };
-
     setChatMessages(prev => [...prev, userMessage]);
-    setTimelineEntries(prev => [...prev, userTimelineEntry]);
+    
+    // Save user message to database
+    await addContextEntry(
+      'user', 
+      message.trim() || `Uploaded ${uploadedFileUrls.length} file${uploadedFileUrls.length > 1 ? 's' : ''}: ${uploadedFileUrls.map(f => f.name).join(', ')}`,
+      uploadedFileUrls.length > 0 ? uploadedFileUrls : undefined
+    );
 
     currentMessageCounter += 2;
 
@@ -628,7 +679,7 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
     console.log('Typing indicator shown'); // Debug log
 
     // Simulate bot response
-    setTimeout(() => {
+    setTimeout(async () => {
       setIsTyping(false); // Hide typing indicator
       console.log('Typing indicator hidden'); // Debug log
       
@@ -640,16 +691,10 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
         date: getCurrentDate()
       };
 
-      const botTimelineEntry: TimelineEntry = {
-        id: currentMessageCounter,
-        type: 'bot',
-        text: 'Thank you for your message. I\'m processing your request and will provide you with a detailed response.',
-        timestamp: getCurrentTime(),
-        date: getCurrentDate()
-      };
-
       setChatMessages(prev => [...prev, botResponse]);
-      setTimelineEntries(prev => [...prev, botTimelineEntry]);
+      
+      // Save bot response to database
+      await addContextEntry('bot', 'Thank you for your message. I\'m processing your request and will provide you with a detailed response.');
     }, 1200); // Reduced to 1.2 seconds for faster response
   };
 
@@ -860,52 +905,67 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
 
             {/* Context History Header */}
             <div className="p-6 pb-0">
-              <div className="font-semibold text-lg mb-4" style={{ color: 'rgba(45,62,79,255)' }}>Context History</div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="font-semibold text-lg" style={{ color: 'rgba(45,62,79,255)' }}>
+                  Context History
+                </div>
+              </div>
             </div>
 
-            {/* Scrollable Timeline */}
+            {/* Scrollable Content */}
             <div className="flex-grow p-6 pt-2 overflow-y-auto">
               <div className="relative min-h-[600px]">
-                {/* Show timeline line only when there are entries */}
-                {timelineEntries.length > 0 && (
-                  <div className="absolute left-1/2 top-6 bottom-0 w-0.5 bg-gray-200 transform -translate-x-1/2"></div>
-                )}
-                
-                <div className="space-y-6 mt-6">
-                  {timelineEntries.map((entry) => (
-                    <div
-                      key={entry.id}
-                      className={`relative max-w-[80%] ${
-                        entry.type === 'user' 
-                          ? 'ml-[50%] pl-4' 
-                          : 'mr-[50%] pr-4 text-right'
-                      }`}
-                    >
-                      {/* Timeline Dot */}
-                      <div className={`absolute w-3 h-3 rounded-full top-3 border-2 border-white shadow-sm ${
-                        entry.type === 'user' 
-                          ? '-left-[6px]' 
-                          : '-right-[6px]'
-                      }`} style={entry.type === 'user' ? { backgroundColor: 'rgba(45,62,79,255)' } : { backgroundColor: '#9ca3af' }}></div>
-                      
-                      {/* Message Bubble */}
-                      <div className={`rounded-xl p-3 text-sm shadow-sm border-0 transition-all duration-200 hover:shadow-md break-words ${
-                        entry.type === 'user'
-                          ? 'text-gray-900'
-                          : 'bg-gray-50 text-gray-700'
-                      }`} style={entry.type === 'user' ? { backgroundColor: 'rgba(237,249,240,255)', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' } : { backgroundColor: 'rgba(220,232,255,255)', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-                        {entry.text}
-                      </div>
-                      
-                      {/* Timestamp */}
-                      <div className={`text-xs text-gray-500 mt-1 whitespace-nowrap ${
-                        entry.type === 'bot' ? 'text-left' : 'text-right'
-                      }`}>
-                        {entry.timestamp} • {entry.date}
-                      </div>
+                {/* Show timeline conversation flow */}
+                {timelineEntries.length > 0 ? (
+                  <>
+                    {/* Timeline line */}
+                    <div className="absolute left-1/2 top-6 bottom-0 w-0.5 bg-gray-200 transform -translate-x-1/2"></div>
+                    
+                    <div className="space-y-6 mt-6">
+                      {timelineEntries.map((entry) => (
+                        <div
+                          key={entry.id}
+                          className={`relative max-w-[80%] ${
+                            entry.type === 'user' 
+                              ? 'ml-[50%] pl-4' 
+                              : 'mr-[50%] pr-4 text-right'
+                          }`}
+                        >
+                          {/* Timeline Dot */}
+                          <div className={`absolute w-3 h-3 rounded-full top-3 border-2 border-white shadow-sm ${
+                            entry.type === 'user' 
+                              ? '-left-[6px]' 
+                              : '-right-[6px]'
+                          }`} style={entry.type === 'user' ? { backgroundColor: 'rgba(45,62,79,255)' } : { backgroundColor: '#9ca3af' }}></div>
+                          
+                          {/* Message Bubble */}
+                          <div className={`rounded-xl p-3 text-sm shadow-sm border-0 transition-all duration-200 hover:shadow-md break-words ${
+                            entry.type === 'user'
+                              ? 'text-gray-900'
+                              : 'bg-gray-50 text-gray-700'
+                          }`} style={entry.type === 'user' ? { backgroundColor: 'rgba(237,249,240,255)', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' } : { backgroundColor: 'rgba(220,232,255,255)', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                            {entry.text}
+                          </div>
+                          
+                          {/* Timestamp */}
+                          <div className={`text-xs text-gray-500 mt-1 whitespace-nowrap ${
+                            entry.type === 'bot' ? 'text-left' : 'text-right'
+                          }`}>
+                            {entry.timestamp} • {entry.date}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </>
+                ) : (
+                  /* Empty state when no conversation yet */
+                  <div className="flex items-center justify-center h-full text-gray-500 text-sm">
+                    <div className="text-center">
+                      <div className="text-2xl mb-2">💬</div>
+                      <div>Your conversation history will appear here</div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

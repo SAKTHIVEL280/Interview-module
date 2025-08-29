@@ -100,7 +100,7 @@ class ChatHandler(BaseHTTPRequestHandler):
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
-                result = chat_bot.start_web_session()
+                result = chat_bot.start_web_session(project_id)
                 self.wfile.write(json.dumps(result).encode())
                 
             except Exception as e:

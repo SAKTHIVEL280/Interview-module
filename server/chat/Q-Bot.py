@@ -32,8 +32,62 @@ class Questionnaire:
             'incorrectly_answered': set(),
             'summary_content': '',
             'chat_history': [],
-            'is_running': False
+            'is_running': False,
+            'project_id': None,  # Track current project
+            'answered_questions_from_db': set()  # Track questions already answered in previous sessions
         }
+    
+    def get_answered_questions_from_backend(self, project_id):
+        """Fetch answered question numbers from the backend"""
+        if not project_id:
+            return []
+        
+        try:
+            response = requests.get(f'http://localhost:5000/api/answered-questions/{project_id}/numbers')
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('success'):
+                    answered_numbers = result.get('answeredQuestions', [])
+                    print(f"Retrieved {len(answered_numbers)} answered questions from database: {answered_numbers}")
+                    return answered_numbers
+                else:
+                    print(f"Failed to fetch answered questions: {result.get('error', 'Unknown error')}")
+            else:
+                print(f"HTTP error fetching answered questions: {response.status_code}")
+        except Exception as e:
+            print(f"Error fetching answered questions from backend: {e}")
+        
+        return []
+    
+    def save_answered_question_to_backend(self, project_id, question_number, question_text, answer_text, files=None, session_id=None):
+        """Save answered question to the backend database"""
+        if not project_id:
+            return False
+        
+        try:
+            data = {
+                'projectId': project_id,
+                'questionNumber': question_number,
+                'questionText': question_text,
+                'answerText': answer_text,
+                'files': files,
+                'sessionId': session_id or f"session_{int(time.time())}"
+            }
+            
+            response = requests.post('http://localhost:5000/api/answered-questions', json=data)
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('success'):
+                    print(f"Saved answered question {question_number} to database")
+                    return True
+                else:
+                    print(f"Failed to save answered question: {result.get('error', 'Unknown error')}")
+            else:
+                print(f"HTTP error saving answered question: {response.status_code}")
+        except Exception as e:
+            print(f"Error saving answered question to backend: {e}")
+        
+        return False
     
     def read_file(self, filename):
         """Read content from a file"""
@@ -749,7 +803,7 @@ class Questionnaire:
         
         print(f"\nFILES: Results saved to: '{self.answers_file}'")
 
-    def start_web_session(self):
+    def start_web_session(self, project_id=None):
         """Initialize web session with files"""
         # Read files
         summary_content = self.read_file("summary.txt")
@@ -773,24 +827,52 @@ class Questionnaire:
                 if question:
                     questions.append(question)
         
+        # Get previously answered questions from database
+        answered_questions_from_db = set()
+        if project_id:
+            answered_question_numbers = self.get_answered_questions_from_backend(project_id)
+            # Convert to 0-based indices and ensure they're within range
+            for q_num in answered_question_numbers:
+                if 1 <= q_num <= len(questions):
+                    answered_questions_from_db.add(q_num - 1)  # Convert to 0-based index
+        
         # Reset session
         self.current_session = {
             'questions': questions,
             'current_question_idx': 0,
-            'correctly_answered': set(),
+            'correctly_answered': answered_questions_from_db.copy(),  # Start with previously answered questions
             'incorrectly_answered': set(),
             'summary_content': summary_content,
             'chat_history': [],
-            'is_running': True
+            'is_running': True,
+            'project_id': project_id,
+            'answered_questions_from_db': answered_questions_from_db
         }
         self.collected_answers = []
+        
+        # Calculate remaining questions
+        remaining_questions = len(questions) - len(answered_questions_from_db)
         
         return {
             'success': True,
             'summary': summary_content,
             'total_questions': len(questions),
-            'first_question': questions[0] if questions else None
+            'answered_questions': len(answered_questions_from_db),
+            'remaining_questions': remaining_questions,
+            'first_question': self.get_next_unanswered_question(),
+            'project_id': project_id
         }
+    
+    def get_next_unanswered_question(self):
+        """Get the next unanswered question"""
+        questions = self.current_session['questions']
+        correctly_answered = self.current_session['correctly_answered']
+        
+        for i in range(len(questions)):
+            if i not in correctly_answered:
+                return questions[i]
+        
+        return None
     
     def get_next_question_web(self):
         """Get next question for web interface"""
@@ -800,42 +882,55 @@ class Questionnaire:
         questions = self.current_session['questions']
         correctly_answered = self.current_session['correctly_answered']
         incorrectly_answered = self.current_session['incorrectly_answered']
+        answered_questions_from_db = self.current_session['answered_questions_from_db']
         
         # Find next question to ask
         current_question_idx = None
         
-        # Priority 1: Questions that were answered incorrectly (re-ask)
+        # Priority 1: Questions that were answered incorrectly in this session (re-ask)
         for i in range(len(questions)):
-            if i in incorrectly_answered and i not in correctly_answered:
+            if (i in incorrectly_answered and 
+                i not in correctly_answered and 
+                i not in answered_questions_from_db):  # Don't re-ask questions answered in previous sessions
                 current_question_idx = i
                 break
         
-        # Priority 2: Questions not yet attempted
+        # Priority 2: Questions not yet attempted (excluding those from previous sessions)
         if current_question_idx is None:
             for i in range(len(questions)):
-                if i not in correctly_answered and i not in incorrectly_answered:
+                if (i not in correctly_answered and 
+                    i not in incorrectly_answered and 
+                    i not in answered_questions_from_db):  # Skip questions answered in previous sessions
                     current_question_idx = i
                     break
         
         if current_question_idx is None:
-            # All questions answered
+            # All questions answered (including from previous sessions)
+            total_answered = len(correctly_answered)
             return {
                 'success': True,
                 'completed': True,
-                'progress': len(correctly_answered),
-                'total': len(questions)
+                'progress': total_answered,
+                'total': len(questions),
+                'answered_in_previous_sessions': len(answered_questions_from_db),
+                'answered_in_current_session': total_answered - len(answered_questions_from_db)
             }
         
         self.current_session['current_question_idx'] = current_question_idx
         question = questions[current_question_idx]
         is_retry = current_question_idx in incorrectly_answered
         
+        # Calculate progress (excluding questions answered in previous sessions from current session count)
+        current_session_answered = len(correctly_answered) - len(answered_questions_from_db)
+        
         return {
             'success': True,
             'question': question,
             'question_number': current_question_idx + 1,
             'total_questions': len(questions),
-            'progress': len(correctly_answered),
+            'progress': len(correctly_answered),  # Total progress including previous sessions
+            'current_session_progress': current_session_answered,  # Progress in current session only
+            'answered_in_previous_sessions': len(answered_questions_from_db),
             'is_retry': is_retry,
             'completed': False
         }
@@ -895,6 +990,17 @@ class Questionnaire:
                     })
                     self.current_session['correctly_answered'].add(current_question_idx)
                     self.current_session['incorrectly_answered'].discard(current_question_idx)
+                    
+                    # Save to database if project_id is available and this wasn't already answered in previous session
+                    if (self.current_session.get('project_id') and 
+                        current_question_idx not in self.current_session.get('answered_questions_from_db', set())):
+                        self.save_answered_question_to_backend(
+                            self.current_session['project_id'],
+                            current_question_idx + 1,  # Convert to 1-based
+                            question,
+                            user_answer
+                        )
+                    
                     results['current_valid'] = True
                 else:
                     self.current_session['incorrectly_answered'].add(current_question_idx)
@@ -921,6 +1027,17 @@ class Questionnaire:
                             })
                             self.current_session['correctly_answered'].add(q_idx)
                             self.current_session['incorrectly_answered'].discard(q_idx)
+                            
+                            # Save to database if project_id is available and this wasn't already answered in previous session
+                            if (self.current_session.get('project_id') and 
+                                q_idx not in self.current_session.get('answered_questions_from_db', set())):
+                                self.save_answered_question_to_backend(
+                                    self.current_session['project_id'],
+                                    q_idx + 1,  # Convert to 1-based
+                                    questions[q_idx],
+                                    extracted_answer
+                                )
+                            
                             results['auto_answered'].append({
                                 'question_number': q_idx + 1,
                                 'question': questions[q_idx],
@@ -938,6 +1055,17 @@ class Questionnaire:
                 })
                 self.current_session['correctly_answered'].add(current_question_idx)
                 self.current_session['incorrectly_answered'].discard(current_question_idx)
+                
+                # Save to database if project_id is available and this wasn't already answered in previous session
+                if (self.current_session.get('project_id') and 
+                    current_question_idx not in self.current_session.get('answered_questions_from_db', set())):
+                    self.save_answered_question_to_backend(
+                        self.current_session['project_id'],
+                        current_question_idx + 1,  # Convert to 1-based
+                        question,
+                        user_answer
+                    )
+                
                 results['current_valid'] = True
             else:
                 self.current_session['incorrectly_answered'].add(current_question_idx)

@@ -524,6 +524,426 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Context History API endpoints
+app.get('/api/context-history/:projectId', async (req, res) => {
+  let connection;
+  try {
+    const projectId = req.params.projectId;
+    console.log(`Fetching context history for project: ${projectId}`);
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    const query = `
+      SELECT 
+        id,
+        message_type,
+        message_text,
+        timestamp,
+        message_date,
+        files,
+        session_id
+      FROM context_history 
+      WHERE project_id = ? 
+      ORDER BY timestamp ASC
+    `;
+    
+    const [rows] = await connection.execute(query, [projectId]);
+    
+    // Transform the data to match frontend format
+    const contextHistory = rows.map(row => ({
+      id: row.id,
+      type: row.message_type,
+      text: row.message_text,
+      timestamp: new Date(row.timestamp).toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+      }),
+      date: new Date(row.message_date).toISOString().split('T')[0],
+      files: row.files ? JSON.parse(row.files) : undefined,
+      sessionId: row.session_id
+    }));
+    
+    console.log(`Retrieved ${contextHistory.length} context history entries`);
+    res.json({ success: true, data: contextHistory });
+    
+  } catch (error) {
+    console.error('Error fetching context history:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch context history',
+      message: 'Unable to retrieve context history from database.'
+    });
+  } finally {
+    if (connection) {
+      await connection.end();
+    }
+  }
+});
+
+app.post('/api/context-history', async (req, res) => {
+  let connection;
+  try {
+    const { projectId, messageType, messageText, files, sessionId } = req.body;
+    
+    if (!projectId || !messageType || !messageText) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: projectId, messageType, messageText'
+      });
+    }
+    
+    console.log(`Saving context history for project: ${projectId}, type: ${messageType}`);
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    const now = new Date();
+    const messageDate = now.toISOString().split('T')[0];
+    
+    const query = `
+      INSERT INTO context_history 
+      (project_id, message_type, message_text, timestamp, message_date, files, session_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
+    
+    const filesJson = files ? JSON.stringify(files) : null;
+    
+    const [result] = await connection.execute(query, [
+      projectId,
+      messageType,
+      messageText,
+      now,
+      messageDate,
+      filesJson,
+      sessionId || null
+    ]);
+    
+    console.log(`Context history saved with ID: ${result.insertId}`);
+    
+    res.json({ 
+      success: true, 
+      id: result.insertId,
+      message: 'Context history saved successfully'
+    });
+    
+  } catch (error) {
+    console.error('Error saving context history:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to save context history',
+      message: 'Unable to save context history to database.'
+    });
+  } finally {
+    if (connection) {
+      await connection.end();
+    }
+  }
+});
+
+app.delete('/api/context-history/:projectId', async (req, res) => {
+  let connection;
+  try {
+    const projectId = req.params.projectId;
+    console.log(`Clearing context history for project: ${projectId}`);
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    const query = 'DELETE FROM context_history WHERE project_id = ?';
+    const [result] = await connection.execute(query, [projectId]);
+    
+    console.log(`Cleared ${result.affectedRows} context history entries`);
+    
+    res.json({ 
+      success: true, 
+      deletedCount: result.affectedRows,
+      message: 'Context history cleared successfully'
+    });
+    
+  } catch (error) {
+    console.error('Error clearing context history:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to clear context history',
+      message: 'Unable to clear context history from database.'
+    });
+  } finally {
+    if (connection) {
+      await connection.end();
+    }
+  }
+});
+
+app.delete('/api/context-history/:projectId/duplicates', async (req, res) => {
+  let connection;
+  try {
+    const projectId = req.params.projectId;
+    console.log(`Cleaning up duplicate context history for project: ${projectId}`);
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    // Find and delete duplicate consecutive bot messages with same text
+    const duplicateQuery = `
+      DELETE h1 FROM context_history h1
+      INNER JOIN context_history h2
+      WHERE h1.project_id = ? 
+      AND h2.project_id = ?
+      AND h1.id > h2.id
+      AND h1.message_type = 'bot'
+      AND h2.message_type = 'bot'
+      AND h1.message_text = h2.message_text
+      AND h1.timestamp > h2.timestamp
+      AND TIMESTAMPDIFF(MINUTE, h2.timestamp, h1.timestamp) < 5
+    `;
+    
+    const [result] = await connection.execute(duplicateQuery, [projectId, projectId]);
+    
+    console.log(`Cleaned up ${result.affectedRows} duplicate context history entries`);
+    
+    res.json({ 
+      success: true, 
+      deletedCount: result.affectedRows,
+      message: 'Duplicate context history entries cleaned up successfully'
+    });
+    
+  } catch (error) {
+    console.error('Error cleaning up duplicate context history:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to clean up duplicate context history',
+      message: 'Unable to clean up duplicate context history from database.'
+    });
+  } finally {
+    if (connection) {
+      await connection.end();
+    }
+  }
+});
+
+// Question-Answer Tracking API endpoints
+app.get('/api/answered-questions/:projectId', async (req, res) => {
+  let connection;
+  try {
+    const projectId = req.params.projectId;
+    console.log(`Fetching answered questions for project: ${projectId}`);
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    const query = `
+      SELECT 
+        id,
+        question_number,
+        question_text,
+        answer_text,
+        answered_at,
+        files,
+        session_id
+      FROM project_question_answers 
+      WHERE project_id = ? AND is_answered = 1
+      ORDER BY question_number ASC
+    `;
+    
+    const [rows] = await connection.execute(query, [projectId]);
+    
+    const answeredQuestions = rows.map(row => ({
+      id: row.id,
+      questionNumber: row.question_number,
+      question: row.question_text,
+      answer: row.answer_text,
+      answeredAt: new Date(row.answered_at).toLocaleString(),
+      files: row.files ? JSON.parse(row.files) : undefined,
+      sessionId: row.session_id
+    }));
+    
+    console.log(`Retrieved ${answeredQuestions.length} answered questions`);
+    res.json({ success: true, data: answeredQuestions });
+    
+  } catch (error) {
+    console.error('Error fetching answered questions:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch answered questions',
+      message: 'Unable to retrieve answered questions from database.'
+    });
+  } finally {
+    if (connection) {
+      await connection.end();
+    }
+  }
+});
+
+app.get('/api/answered-questions/:projectId/numbers', async (req, res) => {
+  let connection;
+  try {
+    const projectId = req.params.projectId;
+    console.log(`Fetching answered question numbers for project: ${projectId}`);
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    const query = `
+      SELECT question_number 
+      FROM project_question_answers 
+      WHERE project_id = ? AND is_answered = 1
+      ORDER BY question_number ASC
+    `;
+    
+    const [rows] = await connection.execute(query, [projectId]);
+    const questionNumbers = rows.map(row => row.question_number);
+    
+    console.log(`Retrieved ${questionNumbers.length} answered question numbers: [${questionNumbers.join(', ')}]`);
+    res.json({ success: true, answeredQuestions: questionNumbers });
+    
+  } catch (error) {
+    console.error('Error fetching answered question numbers:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch answered question numbers',
+      message: 'Unable to retrieve answered question numbers from database.'
+    });
+  } finally {
+    if (connection) {
+      await connection.end();
+    }
+  }
+});
+
+app.post('/api/answered-questions', async (req, res) => {
+  let connection;
+  try {
+    const { projectId, questionNumber, questionText, answerText, files, sessionId } = req.body;
+    
+    if (!projectId || !questionNumber || !questionText || !answerText) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: projectId, questionNumber, questionText, answerText'
+      });
+    }
+    
+    console.log(`Saving answered question ${questionNumber} for project: ${projectId}`);
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    const query = `
+      INSERT INTO project_question_answers 
+      (project_id, question_number, question_text, answer_text, is_answered, answered_at, files, session_id)
+      VALUES (?, ?, ?, ?, 1, NOW(), ?, ?)
+      ON DUPLICATE KEY UPDATE 
+      answer_text = VALUES(answer_text),
+      is_answered = 1,
+      answered_at = NOW(),
+      files = VALUES(files),
+      updated_at = NOW()
+    `;
+    
+    const filesJson = files ? JSON.stringify(files) : null;
+    
+    const [result] = await connection.execute(query, [
+      projectId,
+      questionNumber,
+      questionText,
+      answerText,
+      filesJson,
+      sessionId || null
+    ]);
+    
+    console.log(`Answered question saved/updated with ID: ${result.insertId || 'existing'}`);
+    
+    res.json({ 
+      success: true, 
+      id: result.insertId || result.affectedRows,
+      message: 'Answered question saved successfully'
+    });
+    
+  } catch (error) {
+    console.error('Error saving answered question:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to save answered question',
+      message: 'Unable to save answered question to database.'
+    });
+  } finally {
+    if (connection) {
+      await connection.end();
+    }
+  }
+});
+
+app.get('/api/answered-questions/:projectId/summary', async (req, res) => {
+  let connection;
+  try {
+    const projectId = req.params.projectId;
+    console.log(`Fetching answered questions summary for project: ${projectId}`);
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    const query = `
+      SELECT 
+        project_id,
+        COUNT(*) as total_answered,
+        GROUP_CONCAT(question_number ORDER BY question_number) as answered_question_numbers,
+        MAX(answered_at) as last_answered_at
+      FROM project_question_answers 
+      WHERE project_id = ? AND is_answered = 1 
+      GROUP BY project_id
+    `;
+    
+    const [rows] = await connection.execute(query, [projectId]);
+    const summary = rows[0] || { 
+      project_id: projectId, 
+      total_answered: 0, 
+      answered_question_numbers: null,
+      last_answered_at: null
+    };
+    
+    console.log(`Retrieved summary: ${summary.total_answered} answered questions`);
+    res.json({ success: true, data: summary });
+    
+  } catch (error) {
+    console.error('Error fetching answered questions summary:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch answered questions summary',
+      message: 'Unable to retrieve answered questions summary from database.'
+    });
+  } finally {
+    if (connection) {
+      await connection.end();
+    }
+  }
+});
+
+app.delete('/api/answered-questions/:projectId', async (req, res) => {
+  let connection;
+  try {
+    const projectId = req.params.projectId;
+    console.log(`Clearing answered questions for project: ${projectId}`);
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    const query = 'DELETE FROM project_question_answers WHERE project_id = ?';
+    const [result] = await connection.execute(query, [projectId]);
+    
+    console.log(`Cleared ${result.affectedRows} answered questions`);
+    
+    res.json({ 
+      success: true, 
+      deletedCount: result.affectedRows,
+      message: 'Answered questions cleared successfully'
+    });
+    
+  } catch (error) {
+    console.error('Error clearing answered questions:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to clear answered questions',
+      message: 'Unable to clear answered questions from database.'
+    });
+  } finally {
+    if (connection) {
+      await connection.end();
+    }
+  }
+});
+
 // Chat API bridge endpoints
 app.post('/api/chat/start', async (req, res) => {
   try {
