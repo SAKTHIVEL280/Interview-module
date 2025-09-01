@@ -4,24 +4,30 @@ A sophisticated AI-powered interview system that enhances project summaries thro
 
 ## 🚀 Quick Start
 
-1. **Super Quick Start**: One command starts everything
+1. **Super Quick Start**: One command starts everything (including database setup)
    ```bash
    npm start
    ```
+   *This will automatically set up the database if needed, then start all servers*
 
-2. **Alternative**: Use the startup script
+2. **Database Setup Only**: If you need to setup/reset the database manually
+   ```bash
+   npm run setup:db
+   ```
+
+3. **Alternative**: Use the startup script
    ```bash
    scripts/start-interview-module.bat
    ```
 
-3. **Manual Start**: Start each component separately
+4. **Manual Start**: Start each component separately
    ```bash
    npm run server  # Node.js backend (Port 5000)
    npm run chat    # Python chat server (Port 5001) 
    npm run dev     # React frontend (Port 8080)
    ```
 
-4. **Access the Application**
+5. **Access the Application**
    - Open: http://localhost:8080
    - Or use project-specific URL: http://localhost:8080/3000609
 
@@ -72,15 +78,19 @@ Interview-module/
 - Node.js 16+
 - Python 3.8+
 - MySQL database
+  - MySQL server should be running
+  - Database `certaintimaster` should exist
+  - Root user with appropriate permissions
 
 ### Setup
 1. Clone the repository
 2. Install dependencies: `npm install`
 3. Configure database in `server/config/server.config.js`
-4. Start with `scripts/start-interview-module.bat`
+4. Start with `npm start` (includes automatic database setup)
 
 ### Available Scripts
-- `npm start` - **Start all servers at once** (Recommended)
+- `npm start` - **Start all servers at once** (Recommended - includes DB setup)
+- `npm run setup:db` - **Setup database tables only** 
 - `npm run dev` - Start React development server only
 - `npm run server` - Start Node.js backend only
 - `npm run chat` - Start Python chat server only

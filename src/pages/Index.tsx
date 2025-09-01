@@ -72,106 +72,107 @@ const Index = () => {
   });
   
   // AI-powered question rephrasing function
-  const rephraseQuestionWithAI = async (originalQuestion: string): Promise<string> => {
-    console.log('🤖 Starting AI rephrasing for:', originalQuestion);
-    
-    try {
-      const API_KEY = "AIzaSyBPqXoIuouQ3IhtHe-l0kJYEDiL4-VAQx8";
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
-      
-      const prompt = `You are an expert interviewer. I need you to completely rewrite this question using totally different words and structure, but asking for the exact same information.
+  // TEMPORARILY DISABLED: AI rephrasing functionality
+  // const rephraseQuestionWithAI = async (originalQuestion: string): Promise<string> => {
+  //   console.log('🤖 Starting AI rephrasing for:', originalQuestion);
+  //   
+  //   try {
+  //     const API_KEY = "AIzaSyBPqXoIuouQ3IhtHe-l0kJYEDiL4-VAQx8";
+  //     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+  //     
+  //     const prompt = `You are an expert interviewer. I need you to completely rewrite this question using totally different words and structure, but asking for the exact same information.
 
-ORIGINAL QUESTION: "${originalQuestion}"
+  // ORIGINAL QUESTION: "${originalQuestion}"
 
-IMPORTANT RULES:
-1. YOU CAN use the same starting words (What, How, Why, etc.) but it should be different than the original
-2. DO NOT just add prefixes like "Can you tell me" or "I'd like to know"
-3. CREATE a completely new sentence structure 
-4. USE simple, everyday words that everyone understands
-5. AVOID fancy or complicated vocabulary make it easy to understand
-6. MAKE it sound like a casual, professional conversation
-7. KEEP it as one clear question
-8. USE words a 16-year-old would understand
-9. RETURN ONLY the rephrased question, nothing else
+  // IMPORTANT RULES:
+  // 1. YOU CAN use the same starting words (What, How, Why, etc.) but it should be different than the original
+  // 2. DO NOT just add prefixes like "Can you tell me" or "I'd like to know"
+  // 3. CREATE a completely new sentence structure 
+  // 4. USE simple, everyday words that everyone understands
+  // 5. AVOID fancy or complicated vocabulary make it easy to understand
+  // 6. MAKE it sound like a casual, professional conversation
+  // 7. KEEP it as one clear question
+  // 8. USE words a 16-year-old would understand
+  // 9. RETURN ONLY the rephrased question, nothing else
 
-EXAMPLES:
-- Instead of "What kind of food does John like?" → "Tell me about the food John enjoys"
-- Instead of "What is Sarah's favorite color?" → "Which color does Sarah like best?"
-- Instead of "How does this work?" → "Walk me through how this happens"
+  // EXAMPLES:
+  // - Instead of "What kind of food does John like?" → "Tell me about the food John enjoys"
+  // - Instead of "What is Sarah's favorite color?" → "Which color does Sarah like best?"
+  // - Instead of "How does this work?" → "Walk me through how this happens"
 
-RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra text.`;
+  // RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra text.`;
 
-      console.log('🌐 Making API request to Gemini...');
-      
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: prompt }]
-          }]
-        })
-      });
+  //     console.log('🌐 Making API request to Gemini...');
+  //     
+  //     const response = await fetch(url, {
+  //       method: 'POST',
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //       },
+  //       body: JSON.stringify({
+  //         contents: [{
+  //           parts: [{ text: prompt }]
+  //         }]
+  //       })
+  //     });
 
-      console.log('📡 API Response status:', response.status);
+  //     console.log('📡 API Response status:', response.status);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ API request failed:', response.status, errorText);
-        throw new Error(`API request failed: ${response.status} - ${errorText}`);
-      }
+  //     if (!response.ok) {
+  //       const errorText = await response.text();
+  //       console.error('❌ API request failed:', response.status, errorText);
+  //       throw new Error(`API request failed: ${response.status} - ${errorText}`);
+  //     }
 
-      const data = await response.json();
-      console.log('📦 Raw API response:', data);
-      
-      if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts[0]) {
-        let rephrasedQuestion = data.candidates[0].content.parts[0].text.trim();
-        console.log('🔤 Raw rephrased text:', rephrasedQuestion);
-        
-        // Clean up the response - remove any extra text and formatting
-        rephrasedQuestion = rephrasedQuestion.replace(/^REWRITTEN QUESTION[:\s]*/i, '');
-        rephrasedQuestion = rephrasedQuestion.replace(/^Question[:\s]*/i, '');
-        rephrasedQuestion = rephrasedQuestion.replace(/^Answer[:\s]*/i, '');
-        rephrasedQuestion = rephrasedQuestion.replace(/^Rephrased[:\s]*/i, '');
-        rephrasedQuestion = rephrasedQuestion.replace(/^\*+\s*/, '');
-        rephrasedQuestion = rephrasedQuestion.replace(/\*+$/, '');
-        rephrasedQuestion = rephrasedQuestion.replace(/^["']|["']$/g, '');
-        rephrasedQuestion = rephrasedQuestion.trim();
-        
-        // Split by lines and take only the first meaningful line
-        const lines = rephrasedQuestion.split('\n').filter(line => line.trim().length > 0);
-        if (lines.length > 0) {
-          rephrasedQuestion = lines[0].trim();
-        }
-        
-        // Ensure it ends with a question mark
-        if (!rephrasedQuestion.endsWith('?')) {
-          rephrasedQuestion += '?';
-        }
-        
-        console.log('🎯 Final rephrased question:', rephrasedQuestion);
-        
-        // Basic validation - make sure we got a meaningful response
-        if (rephrasedQuestion.length < 5 || rephrasedQuestion.toLowerCase() === originalQuestion.toLowerCase()) {
-          console.error('⚠️ AI returned invalid or identical response');
-          throw new Error('AI returned invalid or identical response');
-        }
-        
-        console.log('✅ AI Rephrasing successful!');
-        return rephrasedQuestion;
-      } else {
-        console.error('❌ Invalid response format from AI:', data);
-        throw new Error('Invalid response format from AI');
-      }
-    } catch (error) {
-      console.error('💥 AI rephrasing failed:', error);
-      
-      // Fallback to original question if AI fails
-      return getCreativeFallbackRephrasing(originalQuestion);
-    }
-  };
+  //     const data = await response.json();
+  //     console.log('📦 Raw API response:', data);
+  //     
+  //     if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts[0]) {
+  //       let rephrasedQuestion = data.candidates[0].content.parts[0].text.trim();
+  //       console.log('🔤 Raw rephrased text:', rephrasedQuestion);
+  //       
+  //       // Clean up the response - remove any extra text and formatting
+  //       rephrasedQuestion = rephrasedQuestion.replace(/^REWRITTEN QUESTION[:\s]*/i, '');
+  //       rephrasedQuestion = rephrasedQuestion.replace(/^Question[:\s]*/i, '');
+  //       rephrasedQuestion = rephrasedQuestion.replace(/^Answer[:\s]*/i, '');
+  //       rephrasedQuestion = rephrasedQuestion.replace(/^Rephrased[:\s]*/i, '');
+  //       rephrasedQuestion = rephrasedQuestion.replace(/^\*+\s*/, '');
+  //       rephrasedQuestion = rephrasedQuestion.replace(/\*+$/, '');
+  //       rephrasedQuestion = rephrasedQuestion.replace(/^["']|["']$/g, '');
+  //       rephrasedQuestion = rephrasedQuestion.trim();
+  //       
+  //       // Split by lines and take only the first meaningful line
+  //       const lines = rephrasedQuestion.split('\n').filter(line => line.trim().length > 0);
+  //       if (lines.length > 0) {
+  //         rephrasedQuestion = lines[0].trim();
+  //       }
+  //       
+  //       // Ensure it ends with a question mark
+  //       if (!rephrasedQuestion.endsWith('?')) {
+  //         rephrasedQuestion += '?';
+  //       }
+  //       
+  //       console.log('🎯 Final rephrased question:', rephrasedQuestion);
+  //       
+  //       // Basic validation - make sure we got a meaningful response
+  //       if (rephrasedQuestion.length < 5 || rephrasedQuestion.toLowerCase() === originalQuestion.toLowerCase()) {
+  //         console.error('⚠️ AI returned invalid or identical response');
+  //         throw new Error('AI returned invalid or identical response');
+  //       }
+  //       
+  //       console.log('✅ AI Rephrasing successful!');
+  //       return rephrasedQuestion;
+  //     } else {
+  //       console.error('❌ Invalid response format from AI:', data);
+  //       throw new Error('Invalid response format from AI');
+  //     }
+  //   } catch (error) {
+  //     console.error('💥 AI rephrasing failed:', error);
+  //     
+  //     // Fallback to original question if AI fails
+  //     return getCreativeFallbackRephrasing(originalQuestion);
+  //   }
+  // };
 
   // Simple fallback that just returns the original question if AI fails
   const getCreativeFallbackRephrasing = (originalQuestion: string): string => {
@@ -321,8 +322,15 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
           isLoading: false
         }));
         
-        // Clear chat messages - no welcome message needed
-        setChatMessages([]);
+        // Add welcome message when starting chat
+        const welcomeMessage: ChatMessage = {
+          id: Date.now(),
+          type: 'bot',
+          text: `Hello! 👋`,
+          timestamp: getCurrentTime(),
+          date: getCurrentDate()
+        };
+        setChatMessages([welcomeMessage]);
         
         // Show typing indicator IMMEDIATELY and get first question
         setIsTyping(true);
@@ -393,21 +401,26 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
         console.log('🔄 Question received from backend:', data.question);
         console.log('🔍 Is this a retry?', data.is_retry);
         
-        if (data.is_retry) {
-          console.log('🚨 Question retry detected, using AI to rephrase:', data.question);
-          try {
-            // Use AI to rephrase the question completely differently
-            questionText = await rephraseQuestionWithAI(data.question);
-            console.log('🎉 AI rephrasing completed successfully:', questionText);
-          } catch (error) {
-            console.error('💥 AI rephrasing failed, using fallback:', error);
-            // Fallback already handled in the rephraseQuestionWithAI function
-            questionText = getCreativeFallbackRephrasing(data.question);
-            console.log('🔄 Using fallback question:', questionText);
-          }
-        } else {
-          console.log('✅ First attempt, using original question');
-        }
+        // TEMPORARILY DISABLED: Question rephrasing for retries
+        // if (data.is_retry) {
+        //   console.log('🚨 Question retry detected, using AI to rephrase:', data.question);
+        //   try {
+        //     // Use AI to rephrase the question completely differently
+        //     questionText = await rephraseQuestionWithAI(data.question);
+        //     console.log('🎉 AI rephrasing completed successfully:', questionText);
+        //   } catch (error) {
+        //     console.error('💥 AI rephrasing failed, using fallback:', error);
+        //     // Fallback already handled in the rephraseQuestionWithAI function
+        //     questionText = getCreativeFallbackRephrasing(data.question);
+        //     console.log('🔄 Using fallback question:', questionText);
+        //   }
+        // } else {
+        //   console.log('✅ First attempt, using original question');
+        // }
+        
+        // For now, always use the original question
+        console.log('✅ Using original question (rephrasing disabled)');
+        questionText = data.question;
         
         // Add question to chat
         setIsTyping(false); // Hide typing indicator
@@ -958,11 +971,17 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
                     </div>
                   </>
                 ) : (
-                  /* Empty state when no conversation yet */
-                  <div className="flex items-center justify-center h-full text-gray-500 text-sm">
-                    <div className="text-center">
-                      <div className="text-2xl mb-2">💬</div>
-                      <div>Your conversation history will appear here</div>
+                  /* Welcome message when no conversation history yet */
+                  <div className="flex items-center justify-center h-full text-gray-500">
+                    <div className="text-center max-w-md">
+                      <div className="text-4xl mb-4">�</div>
+                      <div className="text-lg font-medium text-gray-700 mb-2">Welcome to Interview Module</div>
+                      <div className="text-sm text-gray-500 mb-4">
+                        Project ID: <span className="font-medium text-gray-700">{PROJECT_ID}</span>
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        Start an interview session to begin improving your project documentation through intelligent questions and conversations.
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1205,6 +1224,22 @@ RESPONSE FORMAT: Return ONLY the rephrased question, no explanations or extra te
                 </div>
               </div>
             ))}
+            
+            {/* Empty state when no chat messages */}
+            {chatMessages.length === 0 && !isTyping && (
+              <div className="flex-grow flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-4xl mb-3">🤖</div>
+                  <div className="text-lg font-medium text-gray-700 mb-2">Ready to Start Interview</div>
+                  <div className="text-sm text-gray-500 mb-4">
+                    Click "Start Interview" to begin the session and receive your first question.
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    Your conversation will appear here once you begin.
+                  </div>
+                </div>
+              </div>
+            )}
             
             {/* Typing Indicator */}
             {isTyping && (

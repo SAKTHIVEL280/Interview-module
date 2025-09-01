@@ -4,6 +4,7 @@ import { spawn } from 'child_process';
 import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
+import setupDatabase from './setup-database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -62,6 +63,19 @@ function startProcess(name, command, args, cwd, color) {
 
 async function main() {
   try {
+    // First, setup database
+    log('magenta', 'DATABASE', 'Setting up database...');
+    const dbSetupSuccess = await setupDatabase();
+    
+    if (!dbSetupSuccess) {
+      log('yellow', 'WARNING', 'Database setup failed, but continuing with server startup...');
+      log('yellow', 'WARNING', 'You may need to run database setup manually later.');
+    }
+
+    console.log('');
+    log('blue', 'SERVERS', 'Starting application servers...');
+    console.log('');
+
     // Start backend server
     await startProcess('Backend', 'node', ['server/server.js'], projectRoot, 'blue');
     await new Promise(resolve => setTimeout(resolve, 2000));

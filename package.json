@@ -11,6 +11,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
+    "setup:db": "node scripts/setup-database.js",
     "start": "node scripts/start-all.js",
     "start:backend": "node server/server.js",
     "start:chat": "cd server/chat && python chat-server.py",
