@@ -681,7 +681,7 @@ app.delete('/api/context-history/:projectId/duplicates', async (req, res) => {
     
     connection = await mysql.createConnection(dbConfig);
     
-    // Find and delete duplicate consecutive bot messages with same text
+    // Find and delete only truly consecutive duplicate bot messages (no user response in between)
     const duplicateQuery = `
       DELETE h1 FROM context_history h1
       INNER JOIN context_history h2
@@ -692,7 +692,14 @@ app.delete('/api/context-history/:projectId/duplicates', async (req, res) => {
       AND h2.message_type = 'bot'
       AND h1.message_text = h2.message_text
       AND h1.timestamp > h2.timestamp
-      AND TIMESTAMPDIFF(MINUTE, h2.timestamp, h1.timestamp) < 5
+      AND TIMESTAMPDIFF(MINUTE, h2.timestamp, h1.timestamp) < 2
+      AND NOT EXISTS (
+        SELECT 1 FROM context_history h3
+        WHERE h3.project_id = h1.project_id
+        AND h3.timestamp > h2.timestamp
+        AND h3.timestamp < h1.timestamp
+        AND h3.message_type = 'user'
+      )
     `;
     
     const [result] = await connection.execute(duplicateQuery, [projectId, projectId]);

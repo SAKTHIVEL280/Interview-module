@@ -436,12 +436,14 @@ const Index = () => {
         setChatMessages(prev => [...prev, questionMessage]);
         
         // Add question to timeline (context history) - save to database
-        // But only if it's not already the last entry to prevent duplicates
-        const shouldAddToHistory = timelineEntries.length === 0 || 
+        // For retries, always save to show conversation flow
+        const shouldAddToHistory = data.is_retry || 
+          timelineEntries.length === 0 || 
           timelineEntries[timelineEntries.length - 1]?.text !== questionText ||
           timelineEntries[timelineEntries.length - 1]?.type !== 'bot';
           
         if (shouldAddToHistory) {
+          console.log(`📝 Adding ${data.is_retry ? 'retry' : 'new'} question to context history`);
           await addContextEntry('bot', questionText);
         } else {
           console.log('🚫 Skipping duplicate question in context history');
