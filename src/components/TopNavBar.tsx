@@ -13,7 +13,7 @@ const TopNavBar: React.FC<TopNavBarProps> = ({ projectId }) => {
     return (
       <div className="w-full shadow-lg border-0 flex items-center z-10" style={{ backgroundColor: 'rgba(45,62,79,255)', minHeight: '64px', fontFamily: 'Lexend, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif', padding: '0' }}>
         <div className="flex items-center justify-center w-full">
-          <span className="text-white text-sm">Loading project data...</span>
+          <span className="text-white text-sm">Loading application...</span>
         </div>
       </div>
     );

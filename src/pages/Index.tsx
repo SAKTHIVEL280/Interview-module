@@ -350,7 +350,7 @@ const Index = () => {
         const errorMessage: ChatMessage = {
           id: Date.now(),
           type: 'bot',
-          text: `Sorry, there was an error starting the interview: ${data.error || 'Unknown error'}. Please refresh the page to try again.`,
+          text: `Sorry, there was an error starting the session: ${data.error || 'Unknown error'}. Please refresh the page to try again.`,
           timestamp: getCurrentTime(),
           date: getCurrentDate()
         };
@@ -976,13 +976,13 @@ const Index = () => {
                   /* Welcome message when no conversation history yet */
                   <div className="flex items-center justify-center h-full text-gray-500">
                     <div className="text-center max-w-md">
-                      <div className="text-4xl mb-4">�</div>
-                      <div className="text-lg font-medium text-gray-700 mb-2">Welcome to Interview Module</div>
+                      <div className="text-4xl mb-4">💬</div>
+                      <div className="text-lg font-medium text-gray-700 mb-2">Welcome to Smart Assistant</div>
                       <div className="text-sm text-gray-500 mb-4">
                         Project ID: <span className="font-medium text-gray-700">{PROJECT_ID}</span>
                       </div>
                       <div className="text-sm text-gray-500">
-                        Start an interview session to begin improving your project documentation through intelligent questions and conversations.
+                        Get started with your AI assistant to help improve your project through intelligent conversations.
                       </div>
                     </div>
                   </div>
@@ -1232,9 +1232,9 @@ const Index = () => {
               <div className="flex-grow flex items-center justify-center">
                 <div className="text-center">
                   <div className="text-4xl mb-3">🤖</div>
-                  <div className="text-lg font-medium text-gray-700 mb-2">Ready to Start Interview</div>
+                  <div className="text-lg font-medium text-gray-700 mb-2">Ready to Chat</div>
                   <div className="text-sm text-gray-500 mb-4">
-                    Click "Start Interview" to begin the session and receive your first question.
+                    Click "Start Chat" to begin the conversation and get assistance with your project.
                   </div>
                   <div className="text-xs text-gray-400">
                     Your conversation will appear here once you begin.

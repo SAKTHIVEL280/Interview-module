@@ -12,7 +12,7 @@ const ProjectSummary: React.FC<ProjectSummaryProps> = ({ projectId }) => {
     return (
       <div className="text-gray-400 text-sm flex items-center gap-2">
         <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-gray-600 rounded-full"></div>
-        Loading summary...
+        Loading content...
       </div>
     );
   }
