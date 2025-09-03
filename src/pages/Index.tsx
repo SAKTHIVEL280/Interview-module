@@ -937,9 +937,9 @@ const Index = () => {
                     <div className="absolute left-1/2 top-6 bottom-0 w-0.5 bg-gray-200 transform -translate-x-1/2"></div>
                     
                     <div className="space-y-6 mt-6">
-                      {timelineEntries.map((entry) => (
+                      {timelineEntries.map((entry, index) => (
                         <div
-                          key={entry.id}
+                          key={`${entry.id}-${index}-${entry.type}-${entry.timestamp}`}
                           className={`relative max-w-[80%] ${
                             entry.type === 'user' 
                               ? 'ml-[50%] pl-4' 
@@ -1042,9 +1042,9 @@ const Index = () => {
             ref={chatMessagesRef}
             className="flex-grow p-6 overflow-y-auto flex flex-col gap-4 min-h-[400px]"
           >
-            {chatMessages.map((msg) => (
+            {chatMessages.map((msg, index) => (
               <div
-                key={msg.id}
+                key={`${msg.id}-${index}-${msg.type}-${msg.timestamp}`}
                 className={`max-w-full flex items-start gap-2 ${
                   msg.type === 'bot' ? 'self-start flex-row' : 'self-end flex-row-reverse'
                 }`}
@@ -1084,7 +1084,7 @@ const Index = () => {
                             const ext = file.name.split('.').pop()?.toLowerCase();
                             if (ext === 'pdf') {
                               return (
-                                <div key={index}>
+                                <div key={`pdf-${index}-${file.name}-${file.url}`}>
                                   <a
                                     href={file.url}
                                     target="_blank"
@@ -1116,7 +1116,7 @@ const Index = () => {
                               
                               if (["png", "jpg", "jpeg", "gif", "bmp", "webp"].includes(ext || '')) {
                                 return (
-                                  <div key={index} className="relative">
+                                  <div key={`img-${index}-${file.name}-${file.url}`} className="relative">
                                     <a
                                       href={file.url}
                                       target="_blank"
@@ -1137,7 +1137,7 @@ const Index = () => {
                                 );
                               } else {
                                 return (
-                                  <div key={index} className="relative">
+                                  <div key={`file-${index}-${file.name}-${file.url}`} className="relative">
                                     <a
                                       href={file.url}
                                       target="_blank"
@@ -1288,7 +1288,7 @@ const Index = () => {
                 <div className="flex flex-wrap gap-1.5">
                   {pendingFiles.map((file, index) => (
                     <div
-                      key={index}
+                      key={`pending-${index}-${file.name}-${file.size}`}
                       className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border"
                       style={{ backgroundColor: 'rgba(237,249,240,255)', borderColor: 'rgba(220,232,255,255)' }}
                     >
