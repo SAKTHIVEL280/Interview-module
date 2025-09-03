@@ -19,7 +19,7 @@ class Questionnaire:
         
         # Get the current working directory (should be data directory)
         self.data_dir = os.getcwd()
-        self.answers_file = os.path.join(self.data_dir, "enhanced_summary.txt")
+        self.answers_file = os.path.join(self.data_dir, "answers.txt")
         
         self.collected_answers = []
         self.max_retries = 3
@@ -452,76 +452,6 @@ class Questionnaire:
         except Exception as e:
             print(f"ERROR: Error saving answer: {e}")
     
-    def generate_enhanced_summary(self, original_summary, collected_answers):
-        """Generate an enhanced summary using the original summary and collected answers"""
-        if not collected_answers:
-            return original_summary
-            
-        answers_text = "\n".join([f"- {qa['question']}: {qa['answer']}" for qa in collected_answers])
-        
-        enhancement_prompt = f"""
-        You are updating a project summary by weaving the user's specific answers DIRECTLY into the existing content. DO NOT add new sections - only enhance what's already there.
-
-        ORIGINAL SUMMARY:
-        {original_summary}
-
-        USER'S ANSWERS TO QUESTIONS:
-        {answers_text}
-
-        CRITICAL TASK:
-        Go through the original summary line by line. For each line, check if any of the user's answers can replace vague statements with specific details. If yes, replace that line with the specific information. If no relevant answer exists, keep the original line unchanged.
-
-        INTEGRATION RULES:
-        1. NEVER add new sections like "More details:" or "Additional information:"
-        2. NEVER append content at the end - only modify existing lines
-        3. Replace incomplete statements with specific details from answers
-        4. Keep the EXACT same line-by-line format
-        5. Maintain the casual, personal writing style
-        6. Fix grammar and spelling while keeping the natural tone
-        
-        REPLACEMENT EXAMPLES:
-        Original line: "i know what food he likes its an indian dish"
-        If answer mentions: "naveen likes idli with sambar"
-        Replace with: "naveen likes idli with sambar"
-        
-        Original line: "i know what his favourite team in cricket"
-        If answer mentions: "his favourite cricket team is csk"  
-        Replace with: "his favourite cricket team is csk"
-        
-        Original line: "he studies computer science"
-        If no relevant answer exists: keep unchanged: "he studies computer science"
-
-        FORBIDDEN ACTIONS:
-        - Adding new sections or headers
-        - Appending content after the original summary
-        - Using phrases like "More details about..." or "Additional information:"
-        - Adding formal language or "I know" statements
-        - Changing the overall structure or number of main points
-
-        Output ONLY the enhanced version of the original summary with specific details woven in where appropriate. Nothing more, nothing less.
-        """
-        
-        enhanced_summary = self.call_gemini_api(enhancement_prompt)
-        
-        # Fallback if API fails
-        if not enhanced_summary:
-            print("WARNING: AI enhancement failed. Creating basic enhanced summary...")
-            enhanced_summary = self.create_fallback_summary(original_summary, collected_answers)
-        
-        return enhanced_summary
-    
-    def create_fallback_summary(self, original_summary, collected_answers):
-        """Create a basic enhanced summary without AI if API fails"""
-        enhanced = original_summary
-        
-        if collected_answers:
-            # Simple integration without formal language
-            enhanced += "\n\nMore details:\n"
-            for qa in collected_answers:
-                enhanced += f"- {qa['question']}: {qa['answer']}\n"
-        
-        return enhanced
-    
     def display_progress(self, current, total):
         """Display progress bar"""
         percentage = (current / total) * 100
@@ -533,7 +463,7 @@ class Questionnaire:
     def run_questionnaire(self):
         """Main function to run the interactive questionnaire"""
         print("=== Questionnaire Bot ===")
-        print("Enhanced Summary Generation System\n")
+        print("Question & Answer Collection System\n")
         
         # Read files
         print("Reading files...")
@@ -763,43 +693,27 @@ class Questionnaire:
         
         if valid_answers > 0:
             print(f"\nSUCCESS: Success rate: {(valid_answers/len(questions)*100):.1f}%")
-            print("\nGENERATING: Generating enhanced summary with AI...")
             
-            # Generate enhanced summary
-            enhanced_summary = self.generate_enhanced_summary(summary_content, self.collected_answers)
-            
-            if enhanced_summary:
-                # Save the enhanced summary
-                try:
-                    with open(self.answers_file, 'w', encoding='utf-8') as file:
-                        file.write("ENHANCED SUMMARY\n")
-                        file.write("=" * 50 + "\n")
-                        file.write(f"Generated on: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-                        file.write(f"Based on {valid_answers} validated answers\n")
-                        file.write("=" * 50 + "\n\n")
-                        file.write(enhanced_summary)
-                        file.write("\n\n" + "=" * 50 + "\n")
-                        file.write("ORIGINAL SUMMARY (PLAIN TEXT):\n")
-                        file.write(summary_content)
-                        file.write("\n\n" + "=" * 50 + "\n")
-                        file.write("GATHERED INFORMATION:\n")
-                        for qa in self.collected_answers:
-                            file.write(f"Q: {qa['question']}\n")
-                            file.write(f"A: {qa['answer']}\n")
-                            file.write(f"Timestamp: {qa['timestamp']}\n\n")
-                    
-                    print(f"SAVED: Enhanced summary generated and saved to: '{self.answers_file}'")
-                    print("\nSUMMARY: Summary Preview:")
-                    print("-" * 30)
-                    preview = enhanced_summary[:200] + "..." if len(enhanced_summary) > 200 else enhanced_summary
-                    print(preview)
-                    
-                except Exception as e:
-                    print(f"ERROR: Error saving enhanced summary: {e}")
-            else:
-                print("ERROR: Could not generate enhanced summary")
+            # Save the collected answers (no enhanced summary generation)
+            try:
+                with open(self.answers_file, 'w', encoding='utf-8') as file:
+                    file.write("QUESTIONNAIRE RESULTS\n")
+                    file.write("=" * 50 + "\n")
+                    file.write(f"Completed on: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    file.write(f"Total validated answers: {valid_answers}\n")
+                    file.write("=" * 50 + "\n\n")
+                    file.write("GATHERED INFORMATION:\n")
+                    for qa in self.collected_answers:
+                        file.write(f"Q: {qa['question']}\n")
+                        file.write(f"A: {qa['answer']}\n")
+                        file.write(f"Timestamp: {qa['timestamp']}\n\n")
+                
+                print(f"SAVED: Questionnaire results saved to: '{self.answers_file}'")
+                
+            except Exception as e:
+                print(f"ERROR: Error saving questionnaire results: {e}")
         else:
-            print("\nNOTE: No valid answers collected. Original summary remains unchanged.")
+            print("\nNOTE: No valid answers collected.")
         
         print(f"\nFILES: Results saved to: '{self.answers_file}'")
 
@@ -1107,39 +1021,27 @@ class Questionnaire:
         if not self.current_session['is_running']:
             return {'success': False, 'error': 'Session not started'}
         
-        # Generate enhanced summary
-        enhanced_summary = self.generate_enhanced_summary(
-            self.current_session['summary_content'], 
-            self.collected_answers
-        )
-        
-        # Save results
-        if enhanced_summary:
-            try:
-                with open(self.answers_file, 'w', encoding='utf-8') as file:
-                    file.write("ENHANCED SUMMARY\n")
-                    file.write("=" * 50 + "\n")
-                    file.write(f"Generated on: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-                    file.write(f"Based on {len(self.collected_answers)} validated answers\n")
-                    file.write("=" * 50 + "\n\n")
-                    file.write(enhanced_summary)
-                    file.write("\n\n" + "=" * 50 + "\n")
-                    file.write("ORIGINAL SUMMARY:\n")
-                    file.write(self.current_session['summary_content'])
-                    file.write("\n\n" + "=" * 50 + "\n")
-                    file.write("GATHERED INFORMATION:\n")
-                    for qa in self.collected_answers:
-                        file.write(f"Q: {qa['question']}\n")
-                        file.write(f"A: {qa['answer']}\n")
-                        file.write(f"Timestamp: {qa['timestamp']}\n\n")
-            except Exception as e:
-                return {'success': False, 'error': f'Error saving results: {e}'}
+        # Save only the collected answers (no enhanced summary generation)
+        try:
+            with open(self.answers_file, 'w', encoding='utf-8') as file:
+                file.write("QUESTIONNAIRE RESULTS\n")
+                file.write("=" * 50 + "\n")
+                file.write(f"Completed on: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                file.write(f"Total validated answers: {len(self.collected_answers)}\n")
+                file.write("=" * 50 + "\n\n")
+                file.write("GATHERED INFORMATION:\n")
+                for qa in self.collected_answers:
+                    file.write(f"Q: {qa['question']}\n")
+                    file.write(f"A: {qa['answer']}\n")
+                    file.write(f"Timestamp: {qa['timestamp']}\n\n")
+        except Exception as e:
+            return {'success': False, 'error': f'Error saving results: {e}'}
         
         self.current_session['is_running'] = False
         
         return {
             'success': True,
-            'enhanced_summary': enhanced_summary,
+            'message': 'Questionnaire completed successfully',
             'total_answers': len(self.collected_answers),
             'total_questions': len(self.current_session['questions'])
         }
@@ -1468,7 +1370,7 @@ def get_html_content():
         <div class="chat-container" id="chatContainer">
             <div class="start-screen" id="startScreen">
                 <h2>Welcome to the Questionnaire Bot</h2>
-                <p>I'll help you create an enhanced summary by asking you specific questions about the content.</p>
+                <p>I'll help you collect information by asking you specific questions about the content.</p>
                 <button class="start-btn" onclick="startQuestionnaire()">Start Questionnaire</button>
             </div>
         </div>
@@ -1611,7 +1513,7 @@ def get_html_content():
                         <div class="completion-message">
                             <h2>🎉 Questionnaire Completed!</h2>
                             <p>You've successfully answered ${data.total_answers} out of ${data.total_questions} questions.</p>
-                            <p>Your enhanced summary has been generated and saved.</p>
+                            <p>Your answers have been collected and saved.</p>
                         </div>
                     `;
                     
