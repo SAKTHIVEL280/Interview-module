@@ -951,6 +951,41 @@ app.delete('/api/answered-questions/:projectId', async (req, res) => {
   }
 });
 
+// Delete session management record to restart session
+app.delete('/api/session-management/:projectId', async (req, res) => {
+  let connection;
+  try {
+    const projectId = req.params.projectId;
+    console.log(`Restarting session for project: ${projectId}`);
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    const query = 'DELETE FROM session_management WHERE project_id = ?';
+    const [result] = await connection.execute(query, [projectId]);
+    
+    console.log(`Deleted ${result.affectedRows} session records for restart`);
+    
+    res.json({ 
+      success: true, 
+      deletedCount: result.affectedRows,
+      message: 'Session restarted successfully',
+      sessionRestarted: true
+    });
+    
+  } catch (error) {
+    console.error('Error restarting session:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to restart session',
+      message: 'Unable to restart session from database.'
+    });
+  } finally {
+    if (connection) {
+      await connection.end();
+    }
+  }
+});
+
 // Chat API bridge endpoints
 app.post('/api/chat/start', async (req, res) => {
   try {
@@ -1154,6 +1189,153 @@ app.get('/:projectId', async (req, res) => {
         console.error('Error closing database connection:', closeError);
       }
     }
+  }
+});
+
+// End session endpoint (for admin role)
+app.post('/api/chat/end-session', async (req, res) => {
+  try {
+    const { projectId } = req.body;
+    
+    if (!projectId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Project ID is required'
+      });
+    }
+
+    // Update session_management table to mark session as ended
+    const connection = await mysql.createConnection(dbConfig);
+    
+    try {
+      // Insert or update session status to ended
+      await connection.execute(`
+        INSERT INTO session_management (project_id, session_status, ended_by_admin, ended_timestamp, admin_id) 
+        VALUES (?, 'ended', TRUE, NOW(), 'admin') 
+        ON DUPLICATE KEY UPDATE 
+          session_status = 'ended',
+          ended_by_admin = TRUE,
+          ended_timestamp = NOW(),
+          admin_id = 'admin',
+          updated_at = CURRENT_TIMESTAMP
+      `, [projectId]);
+      
+      console.log(`Admin ended session for project: ${projectId}`);
+      
+      res.json({
+        success: true,
+        message: 'Session ended successfully',
+        projectId: projectId,
+        endedAt: new Date().toISOString()
+      });
+      
+    } finally {
+      await connection.end();
+    }
+    
+  } catch (error) {
+    console.error('Error ending session:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to end session',
+      message: 'Unable to end session due to server error.'
+    });
+  }
+});
+
+// Restart session endpoint (admin only)
+app.post('/api/chat/restart-session', async (req, res) => {
+  try {
+    const { projectId } = req.body;
+    
+    if (!projectId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Project ID is required'
+      });
+    }
+
+    const connection = await mysql.createConnection(dbConfig);
+    
+    try {
+      // Delete the session management record to restart the session
+      await connection.execute(`
+        DELETE FROM session_management 
+        WHERE project_id = ?
+      `, [projectId]);
+      
+      console.log(`Session restarted for project: ${projectId}`);
+      
+      res.json({
+        success: true,
+        message: 'Session successfully restarted',
+        projectId: projectId
+      });
+      
+    } finally {
+      await connection.end();
+    }
+    
+  } catch (error) {
+    console.error('Error restarting session:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to restart session',
+      message: 'Unable to restart session due to server error.'
+    });
+  }
+});
+
+// Check session status endpoint
+app.get('/api/chat/session-status/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    
+    if (!projectId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Project ID is required'
+      });
+    }
+
+    const connection = await mysql.createConnection(dbConfig);
+    
+    try {
+      // Check if session exists and its status
+      const [rows] = await connection.execute(`
+        SELECT session_status, ended_by_admin, ended_timestamp 
+        FROM session_management 
+        WHERE project_id = ?
+      `, [projectId]);
+      
+      if (rows.length === 0) {
+        // No session record means it's active
+        res.json({
+          success: true,
+          sessionEnded: false,
+          endedByAdmin: false,
+          endedTimestamp: null
+        });
+      } else {
+        const session = rows[0];
+        res.json({
+          success: true,
+          sessionEnded: session.session_status === 'ended',
+          endedByAdmin: session.ended_by_admin === 1,
+          endedTimestamp: session.ended_timestamp
+        });
+      }
+      
+    } finally {
+      await connection.end();
+    }
+    
+  } catch (error) {
+    console.error('Error checking session status:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check session status'
+    });
   }
 });
 

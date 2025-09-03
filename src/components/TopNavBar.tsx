@@ -13,7 +13,7 @@ const TopNavBar: React.FC<TopNavBarProps> = ({ projectId }) => {
     return (
       <div className="w-full shadow-lg border-0 flex items-center z-10" style={{ backgroundColor: 'rgba(45,62,79,255)', minHeight: '64px', fontFamily: 'Lexend, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif', padding: '0' }}>
         <div className="flex items-center justify-center w-full">
-          <span className="text-white text-sm">Loading application...</span>
+          <span className="text-white text-sm">Loading project data...</span>
         </div>
       </div>
     );
@@ -81,14 +81,19 @@ const TopNavBar: React.FC<TopNavBarProps> = ({ projectId }) => {
           alignItems: 'start',
           justifyContent: 'space-between'
         }}>
+          {/* Project ID */}
           <div style={{ display: 'flex', flexDirection: 'column', flex: '0 1 auto', minWidth: '120px' }}>
             <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Project ID</span>
             <span style={{ fontSize: '14px', color: '#ffffff', fontWeight: 600, lineHeight: '1.2', whiteSpace: 'nowrap' }}>{data.projectId}</span>
           </div>
+          
+          {/* Project Number */}
           <div style={{ display: 'flex', flexDirection: 'column', flex: '0 1 auto', minWidth: '130px' }}>
             <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Project Number</span>
             <span style={{ fontSize: '14px', color: '#e2e8f0', fontWeight: 600, lineHeight: '1.2', whiteSpace: 'nowrap' }}>{data.projectNumber}</span>
           </div>
+          
+          {/* Project Name */}
           <div style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minWidth: '200px', maxWidth: '300px' }}>
             <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Project Name</span>
             <span style={{ 
@@ -105,10 +110,14 @@ const TopNavBar: React.FC<TopNavBarProps> = ({ projectId }) => {
               maxHeight: '2.8em'
             }}>{data.programName}</span>
           </div>
+          
+          {/* Account ID */}
           <div style={{ display: 'flex', flexDirection: 'column', flex: '0 1 auto', minWidth: '100px' }}>
             <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Account ID</span>
             <span style={{ fontSize: '14px', color: '#e2e8f0', fontWeight: 600, lineHeight: '1.2', whiteSpace: 'nowrap' }}>{data.accountId}</span>
           </div>
+          
+          {/* Account Name */}
           <div style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minWidth: '180px', maxWidth: '250px' }}>
             <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Account Name</span>
             <span style={{ 
@@ -125,6 +134,8 @@ const TopNavBar: React.FC<TopNavBarProps> = ({ projectId }) => {
               maxHeight: '2.8em'
             }}>{data.accountName}</span>
           </div>
+          
+          {/* Country */}
           <div style={{ display: 'flex', flexDirection: 'column', flex: '0 1 auto', minWidth: '80px' }}>
             <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Country</span>
             <span style={{ fontSize: '14px', color: '#e2e8f0', fontWeight: 600, lineHeight: '1.2', whiteSpace: 'nowrap' }}>{data.country}</span>

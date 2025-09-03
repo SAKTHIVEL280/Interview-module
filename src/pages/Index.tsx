@@ -20,8 +20,20 @@ interface ChatMessage {
 }
 
 const Index = () => {
-  // Get project ID from URL parameter (e.g., /3000609)
+  // Get project ID and role from URL parameter (e.g., /user/3000609, /consultant/3000609, /admin/3000609)
   const { projectId } = useParams<{ projectId: string }>();
+  const location = window.location.pathname;
+  
+  // Determine user role from URL
+  const getUserRole = (): 'user' | 'admin' | 'consultant' => {
+    if (location.includes('/consultant/')) return 'consultant';
+    if (location.includes('/admin/')) return 'admin';
+    if (location.includes('/user/')) return 'user';
+    // Legacy route support - treat as user
+    return 'user';
+  };
+  
+  const userRole: 'user' | 'admin' | 'consultant' = getUserRole();
   
   // Use project ID from URL, fallback to default if none provided
   const PROJECT_ID = projectId || "3000609";
@@ -68,8 +80,74 @@ const Index = () => {
     progress: 0,
     isRetry: false,
     completed: false,
-    isLoading: false
+    isLoading: false,
+    isEnded: false  // For admin session termination
   });
+  
+  // Session management for admin
+  const [sessionEnded, setSessionEnded] = useState(false);
+  
+  // End session function (admin only)
+  const endSession = async () => {
+    if (userRole !== 'admin') return;
+    
+    try {
+      const response = await fetch('http://localhost:5000/api/chat/end-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ projectId: PROJECT_ID })
+      });
+      
+      if (response.ok) {
+        setSessionEnded(true);
+        setChatSession(prev => ({ ...prev, isEnded: true, isActive: false }));
+      }
+    } catch (error) {
+      console.error('Error ending session:', error);
+    }
+  };
+
+  // Restart session function (admin only)
+  const restartSession = async () => {
+    if (userRole !== 'admin') return;
+    
+    try {
+      console.log('Attempting to restart session for project:', PROJECT_ID);
+      
+      const response = await fetch(`http://localhost:5000/api/session-management/${PROJECT_ID}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      console.log('Restart session response status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Restart session response data:', data);
+        
+        setSessionEnded(false);
+        setChatSession(prev => ({ ...prev, isEnded: false, isActive: false, isStarted: false, completed: false }));
+        
+        // Show success message
+        console.log('Session restarted successfully, reloading page...');
+        alert('Session restarted successfully!');
+        
+        // Reload the page to reset everything
+        window.location.reload();
+      } else {
+        const errorData = await response.text();
+        console.error('Failed to restart session. Status:', response.status, 'Response:', errorData);
+        alert('Failed to restart session. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error restarting session:', error);
+      alert('Error restarting session. Please check if the server is running.');
+    }
+  };
   
   // AI-powered question rephrasing function
   // TEMPORARILY DISABLED: AI rephrasing functionality
@@ -270,11 +348,23 @@ const Index = () => {
   }, [timelineEntries]);
 
   const getCurrentTime = () => {
-    const now = new Date();
-    const hours = now.getHours() % 12 || 12;
-    const minutes = now.getMinutes().toString().padStart(2, '0');
-    const ampm = now.getHours() >= 12 ? 'PM' : 'AM';
-    return `${hours}:${minutes} ${ampm}`;
+    return new Date().toISOString();
+  };
+
+  const formatDisplayTime = (timestamp: string) => {
+    try {
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) {
+        // If timestamp is already formatted (legacy), return as is
+        return timestamp;
+      }
+      return date.toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+    } catch (error) {
+      return timestamp; // Fallback to original timestamp
+    }
   };
 
   const getCurrentDate = () => {
@@ -809,6 +899,29 @@ const Index = () => {
     setPendingFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      // If mic is recording, turn it off
+      if (isRecording) {
+        setIsRecording(false);
+        if (recognitionRef.current) {
+          recognitionRef.current.stop();
+        }
+      }
+      
+      Array.from(files).forEach(file => {
+        if (file.size > 50 * 1024 * 1024) { // 50MB limit
+          alert(`File "${file.name}" is too large. Maximum size is 50MB.`);
+          return;
+        }
+        setPendingFiles(prev => [...prev, file]);
+      });
+    }
+    // Clear the input
+    event.target.value = '';
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -888,10 +1001,648 @@ const Index = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Check session status periodically and on mount
+  useEffect(() => {
+    const checkSessionStatus = async () => {
+      try {
+        const response = await fetch(`http://localhost:5000/api/chat/session-status/${PROJECT_ID}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            // Update session state based on server response
+            setSessionEnded(data.sessionEnded);
+            if (data.sessionEnded) {
+              setChatSession(prev => ({ ...prev, isEnded: true, isActive: false }));
+            }
+          }
+        } else if (response.status === 404) {
+          // Endpoint not found - server might not be fully updated
+          // Silently continue without session checking
+          console.warn('Session status endpoint not available - continuing without session management');
+          return;
+        }
+      } catch (error) {
+        // Network error or server down - silently continue
+        console.warn('Could not check session status:', error.message);
+      }
+    };
+
+    // Check immediately on mount
+    checkSessionStatus();
+
+    // Check every 5 seconds for real-time updates (for all roles)
+    const interval = setInterval(checkSessionStatus, 5000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [PROJECT_ID]);
+
+  // Render right panel content based on user role
+  const renderRightPanelContent = () => {
+    // Consultant role: Show chat interface with status bar (same as admin but read-only)
+    if (userRole === 'consultant') {
+      return (
+        <div className="flex flex-col h-full">
+          {/* Status Bar for Consultant */}
+          <div className="bg-blue-50 border-b border-blue-200 px-6 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                <span className="text-sm font-medium text-blue-800">Live Interview Monitor</span>
+              </div>
+              <div className="flex items-center gap-4 text-xs">
+                {/* Session Status Indicator */}
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${sessionEnded ? 'bg-red-500' : 'bg-green-500'}`}></div>
+                  <span className={`font-medium ${sessionEnded ? 'text-red-600' : 'text-green-600'}`}>
+                    {sessionEnded ? 'Ended' : 'Active'}
+                  </span>
+                </div>
+                {/* Message Count */}
+                <div className="text-blue-600">
+                  {timelineEntries.length > 0 ? `${timelineEntries.length} messages` : 'Waiting for interview...'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Chat Messages Container for Consultant */}
+          <div className="flex-grow p-6 overflow-y-auto flex flex-col gap-4 min-h-[400px]">
+            {/* Display all history as chat messages */}
+            {timelineEntries.length > 0 ? (
+              timelineEntries.map((entry, index) => (
+                <div
+                  key={`${entry.id}-${index}-${entry.type}-${entry.timestamp}`}
+                  className={`max-w-full flex items-start gap-2 ${
+                    entry.type === 'bot' ? 'self-start flex-row' : 'self-end flex-row-reverse'
+                  }`}
+                >
+                  {/* Profile Avatar */}
+                  <div className="flex-shrink-0 mt-0.5">
+                    {entry.type === 'bot' ? (
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center border-2 border-white shadow-md bg-white">
+                        <img src="/favicon.svg" alt="Certainti Logo" className="w-5 h-5" />
+                      </div>
+                    ) : (
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-lg border-2 border-white shadow-md" style={{ backgroundColor: 'rgba(237,249,240,255)', color: 'rgba(45,62,79,255)' }}>
+                        U
+                      </div>
+                    )}
+                  </div>
+                  {/* Message Bubble and Timestamp */}
+                  <div className="flex flex-col min-w-0 flex-1 max-w-[80%]">
+                    <div className={`p-3 rounded-xl text-base shadow-sm border transition-all duration-200 hover:shadow-md word-wrap break-words ${
+                      entry.type === 'bot'
+                        ? 'bg-gray-100 border-gray-200 text-gray-700 rounded-tl-sm'
+                        : 'rounded-tr-sm'
+                    }`} style={{
+                      ...(entry.type === 'user' ? { backgroundColor: 'rgba(237,249,240,255)', border: '1px solid #d1fae5', color: '#065f46' } : {}),
+                      wordBreak: 'break-word',
+                      overflowWrap: 'break-word',
+                      hyphens: 'auto',
+                      lineHeight: '1.5'
+                    }}>
+                      <div className="word-wrap break-words" style={{ wordBreak: 'break-word', overflowWrap: 'break-word', hyphens: 'auto', lineHeight: '1.5' }}>
+                        {entry.text}
+                      </div>
+                    </div>
+                    <div className={`text-xs text-gray-500 mt-1 whitespace-nowrap ${
+                      entry.type === 'user' ? 'self-end' : 'self-start'
+                    }`}>
+                      {formatDisplayTime(entry.timestamp)} • {entry.date}
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="flex-grow flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-4xl mb-3">�️‍🗨️</div>
+                  <div className="text-lg font-medium text-gray-700 mb-2">Monitoring Interview</div>
+                  <div className="text-sm text-gray-500">
+                    The conversation will appear here when the user begins their interview.
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // Admin role: Show all history as chat messages with End Session button
+    if (userRole === 'admin') {
+      return (
+        <div className="flex flex-col h-full">
+          {/* Chat Messages Container for Admin */}
+          <div className="flex-grow p-6 overflow-y-auto flex flex-col gap-4 min-h-[400px]">
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">Live Interview Monitor</h3>
+              <p className="text-sm text-gray-600">Real-time view of the interview conversation</p>
+            </div>
+
+            {/* Display all history as chat messages */}
+            {timelineEntries.length > 0 ? (
+              timelineEntries.map((entry, index) => (
+                <div
+                  key={`${entry.id}-${index}-${entry.type}-${entry.timestamp}`}
+                  className={`max-w-full flex items-start gap-2 ${
+                    entry.type === 'bot' ? 'self-start flex-row' : 'self-end flex-row-reverse'
+                  }`}
+                >
+                  {/* Profile Avatar */}
+                  <div className="flex-shrink-0 mt-0.5">
+                    {entry.type === 'bot' ? (
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center border-2 border-white shadow-md bg-white">
+                        <img src="/favicon.svg" alt="Certainti Logo" className="w-5 h-5" />
+                      </div>
+                    ) : (
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-lg border-2 border-white shadow-md" style={{ backgroundColor: 'rgba(237,249,240,255)', color: 'rgba(45,62,79,255)' }}>
+                        U
+                      </div>
+                    )}
+                  </div>
+                  {/* Message Bubble and Timestamp */}
+                  <div className="flex flex-col min-w-0 flex-1 max-w-[80%]">
+                    <div className={`p-3 rounded-xl text-base shadow-sm border transition-all duration-200 hover:shadow-md word-wrap break-words ${
+                      entry.type === 'bot'
+                        ? 'bg-gray-100 border-gray-200 text-gray-700 rounded-tl-sm'
+                        : 'rounded-tr-sm'
+                    }`} style={{
+                      ...(entry.type === 'user' ? { backgroundColor: 'rgba(237,249,240,255)', border: '1px solid #d1fae5', color: '#065f46' } : {}),
+                      wordBreak: 'break-word',
+                      overflowWrap: 'break-word',
+                      hyphens: 'auto',
+                      lineHeight: '1.5'
+                    }}>
+                      <div className="word-wrap break-words" style={{ wordBreak: 'break-word', overflowWrap: 'break-word', hyphens: 'auto', lineHeight: '1.5' }}>
+                        {entry.text}
+                      </div>
+                    </div>
+                    <div className={`text-xs text-gray-500 mt-1 whitespace-nowrap ${
+                      entry.type === 'user' ? 'self-end' : 'self-start'
+                    }`}>
+                      {formatDisplayTime(entry.timestamp)} • {entry.date}
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="flex-grow flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-4xl mb-3">👁️‍🗨️</div>
+                  <div className="text-lg font-medium text-gray-700 mb-2">Waiting for Interview to Start</div>
+                  <div className="text-sm text-gray-500">
+                    The conversation will appear here when the user begins their interview.
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* End/Restart Session Button for Admin */}
+          <div className="border-t border-gray-200 bg-white p-4">
+            <div className="flex justify-center">
+              {!sessionEnded ? (
+                <button
+                  onClick={endSession}
+                  className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors duration-200 flex items-center gap-2"
+                >
+                  End Session
+                </button>
+              ) : (
+                <div className="flex items-center gap-4">
+                  <div className="px-6 py-3 bg-gray-500 text-white rounded-lg font-medium flex items-center gap-2">
+                    Session Ended
+                  </div>
+                  <button
+                    onClick={restartSession}
+                    className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors duration-200 flex items-center gap-2"
+                  >
+                    Restart Session
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // User role with session ended: Show thank you message
+    if (userRole === 'user' && sessionEnded) {
+      return (
+        <div className="flex-grow flex items-center justify-center p-6">
+          <div className="text-center max-w-md">
+            <h2 className="text-2xl font-semibold text-gray-800 mb-4">Thank You!</h2>
+            <p className="text-gray-600 mb-4">
+              Thank you for providing your information. The session has been ended by the administrator.
+            </p>
+            <p className="text-sm text-gray-500">
+              Your responses have been saved and will be reviewed by our team.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    // Default: Regular chat interface for users and admins
+    return (
+      <>
+        {/* Chat Messages Container */}
+        <div 
+          ref={chatMessagesRef}
+          className="flex-grow p-6 overflow-y-auto flex flex-col gap-4 min-h-[400px]"
+        >
+          {/* Chat Messages Display */}
+          {chatMessages.map((msg) => (
+            <div
+              key={msg.id}
+              className={`max-w-full flex items-start gap-2 ${
+                msg.type === 'bot' ? 'self-start flex-row' : 'self-end flex-row-reverse'
+              }`}
+            >
+              {/* Profile Avatar */}
+              <div className="flex-shrink-0 mt-0.5">
+                {msg.type === 'bot' ? (
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center border-2 border-white shadow-md bg-white">
+                    <img src="/favicon.svg" alt="Certainti Logo" className="w-5 h-5" />
+                  </div>
+                ) : (
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-lg border-2 border-white shadow-md" style={{ backgroundColor: 'rgba(237,249,240,255)', color: 'rgba(45,62,79,255)' }}>
+                    U
+                  </div>
+                )}
+              </div>
+              {/* Message Bubble and Timestamp */}
+              <div className="flex flex-col min-w-0 flex-1 max-w-[80%]">
+                <div className={`p-3 rounded-xl text-base shadow-sm border transition-all duration-200 hover:shadow-md word-wrap break-words ${
+                  msg.type === 'bot'
+                    ? 'bg-gray-100 border-gray-200 text-gray-700 rounded-tl-sm'
+                    : 'rounded-tr-sm'
+                }`} style={{
+                  ...(msg.type === 'user' ? { backgroundColor: 'rgba(237,249,240,255)', border: '1px solid #d1fae5', color: '#065f46' } : {}),
+                  wordBreak: 'break-word',
+                  overflowWrap: 'break-word',
+                  hyphens: 'auto',
+                  lineHeight: '1.5'
+                }}>
+                  
+                  {/* Display files if they exist - PDF at top-right, text below */}
+                  {msg.files && msg.files.length > 0 && (
+                    <div>
+                      {/* PDF files positioned at top-right */}
+                      <div className="flex justify-end mb-2">
+                        {msg.files.map((file, index) => {
+                          const ext = file.name.split('.').pop()?.toLowerCase();
+                          if (ext === 'pdf') {
+                            return (
+                              <div key={index}>
+                                <a
+                                  href={file.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-red-700 hover:bg-red-100 transition-colors cursor-pointer text-sm"
+                                  title={`Open ${file.name}`}
+                                >
+                                  <span className="text-red-500">📄</span>
+                                  <span className="max-w-[120px] truncate font-medium">
+                                    {file.name}
+                                  </span>
+                                </a>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
+                      
+                      {/* Non-PDF files in grid layout */}
+                      {msg.files.some(file => {
+                        const ext = file.name.split('.').pop()?.toLowerCase();
+                        return ext !== 'pdf';
+                      }) && (
+                        <div className="grid gap-2 mb-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', maxWidth: '500px' }}>
+                          {msg.files.map((file, index) => {
+                            const ext = file.name.split('.').pop()?.toLowerCase();
+                            if (ext === 'pdf') return null;
+                            
+                            if (["png", "jpg", "jpeg", "gif", "bmp", "webp"].includes(ext || '')) {
+                              return (
+                                <div key={index} className="relative">
+                                  <a
+                                    href={file.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="block w-20 h-14 border rounded overflow-hidden hover:opacity-80 transition-opacity cursor-pointer"
+                                    style={{ aspectRatio: '4/3' }}
+                                  >
+                                    <img
+                                      src={file.url}
+                                      alt={file.name}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </a>
+                                  <div className="text-xs text-gray-500 truncate mt-1 max-w-20" title={file.name}>
+                                    {file.name}
+                                  </div>
+                                </div>
+                              );
+                            } else {
+                              return (
+                                <div key={index} className="relative">
+                                  <a
+                                    href={file.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="block w-20 h-14 bg-gray-100 border rounded flex items-center justify-center text-xl hover:bg-gray-200 transition-colors cursor-pointer"
+                                    style={{ aspectRatio: '4/3' }}
+                                  >
+                                    📄
+                                  </a>
+                                  <div className="text-xs text-gray-500 truncate mt-1 max-w-20" title={file.name}>
+                                    {file.name}
+                                  </div>
+                                </div>
+                              );
+                            }
+                          })}
+                        </div>
+                      )}
+                      
+                      {/* Text content below files */}
+                      {msg.text && (
+                        <div className="word-wrap break-words" style={{ wordBreak: 'break-word', overflowWrap: 'break-word', hyphens: 'auto', lineHeight: '1.5' }}>
+                          {msg.text}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Display text only if no files are present */}
+                  {msg.text && (!msg.files || msg.files.length === 0) && (
+                    <div className="word-wrap break-words" style={{ wordBreak: 'break-word', overflowWrap: 'break-word', hyphens: 'auto', lineHeight: '1.5' }}>
+                      {msg.text}
+                    </div>
+                  )}
+                  
+                  {/* Backward compatibility - display single file if using old format */}
+                  {msg.fileUrl && !msg.files && (
+                    (() => {
+                      const ext = msg.fileName?.split('.').pop()?.toLowerCase();
+                      if (ext === 'pdf') {
+                        return (
+                          <div className="inline-block">
+                            <a
+                              href={msg.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-red-700 hover:bg-red-100 transition-colors cursor-pointer"
+                              title={`Open ${msg.fileName || 'PDF Document'}`}
+                            >
+                              <span className="text-red-500">📄</span>
+                              <span className="max-w-[150px] truncate font-medium">
+                                {msg.fileName || 'PDF Document'}
+                              </span>
+                            </a>
+                          </div>
+                        );
+                      } else if (["png", "jpg", "jpeg", "gif", "bmp", "webp"].includes(ext || '')) {
+                        return (
+                          <img
+                            src={msg.fileUrl}
+                            alt={msg.fileName}
+                            className="max-w-xs max-h-32 rounded border"
+                            style={{ maxWidth: '200px' }}
+                          />
+                        );
+                      } else {
+                        return (
+                          <a
+                            href={msg.fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 underline break-all text-sm"
+                          >
+                            📄 {msg.fileName || 'Open Document'}
+                          </a>
+                        );
+                      }
+                    })()
+                  )}
+                </div>
+                <div className={`text-xs text-gray-500 mt-1 whitespace-nowrap ${
+                  msg.type === 'user' ? 'self-end' : 'self-start'
+                }`}>
+                  {formatDisplayTime(msg.timestamp)} • {msg.date}
+                </div>
+              </div>
+            </div>
+          ))}
+          
+          {/* Empty State */}
+          {chatMessages.length === 0 && !isTyping && (
+            <div className="flex-grow flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-4xl mb-3">🤖</div>
+                <div className="text-lg font-medium text-gray-700 mb-2">Ready to Start Interview</div>
+                <div className="text-sm text-gray-500 mb-4">
+                  Click "Start Interview" to begin the session and receive your first question.
+                </div>
+                <div className="text-xs text-gray-400">
+                  Your conversation will appear here once you begin.
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Typing Indicator */}
+          {isTyping && (
+            <div className="max-w-full flex items-start gap-2 self-start flex-row animate-fadeIn">
+              {/* Bot Avatar */}
+              <div className="flex-shrink-0 mt-0.5">
+                <div className="w-9 h-9 rounded-full flex items-center justify-center border-2 border-white shadow-md bg-white">
+                  <img src="/favicon.svg" alt="Certainti Logo" className="w-5 h-5" />
+                </div>
+              </div>
+              {/* Typing Bubble */}
+              <div className="flex flex-col min-w-0 flex-1 max-w-[80%]">
+                <div className="p-3 rounded-xl text-base shadow-sm border bg-gray-100 border-gray-200 text-gray-700 rounded-tl-sm max-w-fit">
+                  <div className="flex items-center gap-3">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 rounded-full" style={{ 
+                        backgroundColor: 'rgba(45,62,79,255)', 
+                        animation: 'dotPulse 1.6s ease-in-out infinite',
+                        animationDelay: '0ms'
+                      }}></div>
+                      <div className="w-2 h-2 rounded-full" style={{ 
+                        backgroundColor: 'rgba(45,62,79,255)', 
+                        animation: 'dotPulse 1.6s ease-in-out infinite',
+                        animationDelay: '200ms'
+                      }}></div>
+                      <div className="w-2 h-2 rounded-full" style={{ 
+                        backgroundColor: 'rgba(45,62,79,255)', 
+                        animation: 'dotPulse 1.6s ease-in-out infinite',
+                        animationDelay: '400ms'
+                      }}></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Input Area - only show for user role when session is not ended */}
+        {userRole === 'user' && !sessionEnded && (
+          <div className="border-t border-gray-200 bg-white">
+            {/* Pending Files Display */}
+            {pendingFiles.length > 0 && (
+              <div className="px-4 pt-3 pb-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {pendingFiles.map((file, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border"
+                      style={{ backgroundColor: 'rgba(237,249,240,255)', borderColor: 'rgba(220,232,255,255)' }}
+                    >
+                      <span className="truncate max-w-[120px]" style={{ color: 'rgba(45,62,79,255)' }}>
+                        📄 {file.name}
+                      </span>
+                      <button
+                        onClick={() => removePendingFile(index)}
+                        className="text-red-500 hover:text-red-700 text-sm leading-none w-3 h-3 flex items-center justify-center"
+                        title="Remove file"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Chat Bar UI - Input Controls */}
+            <div className="p-4 flex items-end gap-3">
+              {/* Voice Recording Button */}
+              <button 
+                onClick={handleVoiceRecord}
+                className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
+                  isRecording 
+                    ? 'bg-red-100 text-red-600 hover:bg-red-200' 
+                    : ''
+                }`}
+                style={!isRecording ? { background: '#f2603b', color: '#fff' } : {}}
+                onMouseOver={e => { if (!isRecording) { (e.currentTarget as HTMLButtonElement).style.background = '#e55a35'; (e.currentTarget as HTMLButtonElement).style.color = '#fff'; } }}
+                onMouseOut={e => { if (!isRecording) { (e.currentTarget as HTMLButtonElement).style.background = '#f2603b'; (e.currentTarget as HTMLButtonElement).style.color = '#fff'; } }}
+              >
+                {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+              </button>
+              
+              {/* File Attachment Button */}
+              <button
+                onClick={handleFileAttach}
+                className="w-10 h-10 flex items-center justify-center rounded-lg transition-colors"
+                style={{ backgroundColor: '#f2603b', color: '#fff' }}
+                onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#e55a35'; }}
+                onMouseOut={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#f2603b'; }}
+              >
+                <Paperclip className="w-5 h-5" />
+              </button>
+              
+              {/* Hidden File Input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                onChange={handleFileSelect}
+                className="hidden"
+                accept="*/*"
+                multiple
+              />
+              
+              {/* Main Text Input Textarea */}
+              <textarea
+                ref={textareaRef}
+                value={message}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                placeholder={
+                  chatSession.completed
+                    ? "Completed"
+                    : chatSession.isActive && chatSession.currentQuestion 
+                    ? "Type your answer here..." 
+                    : chatSession.isLoading
+                    ? "Loading..."
+                    : chatSession.isStarted
+                    ? "Waiting for next chat..."
+                    : "Type a message or use voice to start..."
+                }
+                disabled={
+                  chatSession.completed || 
+                  chatSession.isLoading || 
+                  (chatSession.isActive && !chatSession.currentQuestion) ||
+                  (!chatSession.isActive && !chatSession.isStarted)
+                }
+                className="flex-grow border rounded-lg p-2 text-base min-h-[40px] max-h-[120px] resize-none outline-none transition-all duration-200 overflow-y-hidden"
+                style={{ 
+                  borderColor: 'rgba(220,232,255,255)', 
+                  backgroundColor: 'white',
+                  color: 'rgba(45,62,79,255)'
+                }}
+                rows={1}
+              />
+              
+              {/* Send Button */}
+              <button
+                onClick={handleSend}
+                disabled={
+                  chatSession.completed ||
+                  chatSession.isLoading || 
+                  (chatSession.isActive && chatSession.currentQuestion && !message.trim() && pendingFiles.length === 0) ||
+                  (!chatSession.isActive && !chatSession.isStarted) ||
+                  (!chatSession.isActive && !message.trim() && pendingFiles.length === 0)
+                }
+                className="w-10 h-10 flex items-center justify-center text-white rounded-lg disabled:cursor-not-allowed transition-colors"
+                style={{ 
+                  backgroundColor: (
+                    chatSession.completed ||
+                    chatSession.isLoading || 
+                    (chatSession.isActive && chatSession.currentQuestion && !message.trim() && pendingFiles.length === 0) ||
+                    (!chatSession.isActive && !chatSession.isStarted) ||
+                    (!chatSession.isActive && !message.trim() && pendingFiles.length === 0)
+                  ) ? '#d1d5db' : '#f2603b'
+                }}
+                onMouseOver={e => { 
+                  if (!e.currentTarget.disabled) {
+                    (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#e55a35';
+                  }
+                }}
+                onMouseOut={e => { 
+                  if (!e.currentTarget.disabled) {
+                    (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#f2603b';
+                  }
+                }}
+              >
+                {chatSession.isLoading ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Send className="w-5 h-5" />
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  };
+
   return (
     <div className="h-screen flex flex-col overflow-hidden" style={{ backgroundColor: 'rgba(220,232,255,255)' }}>
       {/* Top Navigation Bar with SME Project Info */}
-      <TopNavBar projectId={PROJECT_ID} />
+      <TopNavBar 
+        projectId={PROJECT_ID} 
+      />
 
       {/* Main Content Area */}
       <div ref={containerRef} className="flex h-full overflow-hidden">
@@ -1029,7 +1780,7 @@ const Index = () => {
           />
         </div>
 
-        {/* Right Panel - Chat Area */}
+        {/* Right Panel - Role-based Content */}
         <div 
           className="flex-grow h-full flex flex-col bg-white shadow-lg min-w-0 overflow-hidden"
           style={{
@@ -1037,381 +1788,7 @@ const Index = () => {
             transition: isLayoutInitialized ? 'none' : 'width 0.1s ease'
           }}
         >
-          {/* Chat Messages */}
-          <div 
-            ref={chatMessagesRef}
-            className="flex-grow p-6 overflow-y-auto flex flex-col gap-4 min-h-[400px]"
-          >
-            {chatMessages.map((msg, index) => (
-              <div
-                key={`${msg.id}-${index}-${msg.type}-${msg.timestamp}`}
-                className={`max-w-full flex items-start gap-2 ${
-                  msg.type === 'bot' ? 'self-start flex-row' : 'self-end flex-row-reverse'
-                }`}
-              >
-                {/* Profile Avatar */}
-                <div className="flex-shrink-0 mt-0.5">
-                  {msg.type === 'bot' ? (
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center border-2 border-white shadow-md bg-white">
-                      <img src="/favicon.svg" alt="Certainti Logo" className="w-5 h-5" />
-                    </div>
-                  ) : (
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-lg border-2 border-white shadow-md" style={{ backgroundColor: 'rgba(237,249,240,255)', color: 'rgba(45,62,79,255)' }}>
-                      U
-                    </div>
-                  )}
-                </div>
-                {/* Message Bubble and Timestamp */}
-                <div className="flex flex-col min-w-0 flex-1 max-w-[80%]">
-                  <div className={`p-3 rounded-xl text-base shadow-sm border transition-all duration-200 hover:shadow-md word-wrap break-words ${
-                    msg.type === 'bot'
-                      ? 'bg-gray-100 border-gray-200 text-gray-700 rounded-tl-sm'
-                      : 'rounded-tr-sm'
-                  }`} style={{
-                    ...(msg.type === 'user' ? { backgroundColor: 'rgba(237,249,240,255)', border: '1px solid #d1fae5', color: '#065f46' } : {}),
-                    wordBreak: 'break-word',
-                    overflowWrap: 'break-word',
-                    hyphens: 'auto',
-                    lineHeight: '1.5'
-                  }}>
-                    
-                    {/* Display files if they exist - PDF at top-right, text below */}
-                    {msg.files && msg.files.length > 0 && (
-                      <div>
-                        {/* PDF files positioned at top-right */}
-                        <div className="flex justify-end mb-2">
-                          {msg.files.map((file, index) => {
-                            const ext = file.name.split('.').pop()?.toLowerCase();
-                            if (ext === 'pdf') {
-                              return (
-                                <div key={`pdf-${index}-${file.name}-${file.url}`}>
-                                  <a
-                                    href={file.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-red-700 hover:bg-red-100 transition-colors cursor-pointer text-sm"
-                                    title={`Open ${file.name}`}
-                                  >
-                                    <span className="text-red-500">📄</span>
-                                    <span className="max-w-[120px] truncate font-medium">
-                                      {file.name}
-                                    </span>
-                                  </a>
-                                </div>
-                              );
-                            }
-                            return null;
-                          })}
-                        </div>
-                        
-                        {/* Non-PDF files in grid layout */}
-                        {msg.files.some(file => {
-                          const ext = file.name.split('.').pop()?.toLowerCase();
-                          return ext !== 'pdf';
-                        }) && (
-                          <div className="grid gap-2 mb-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', maxWidth: '500px' }}>
-                            {msg.files.map((file, index) => {
-                              const ext = file.name.split('.').pop()?.toLowerCase();
-                              if (ext === 'pdf') return null;
-                              
-                              if (["png", "jpg", "jpeg", "gif", "bmp", "webp"].includes(ext || '')) {
-                                return (
-                                  <div key={`img-${index}-${file.name}-${file.url}`} className="relative">
-                                    <a
-                                      href={file.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="block w-20 h-14 border rounded overflow-hidden hover:opacity-80 transition-opacity cursor-pointer"
-                                      style={{ aspectRatio: '4/3' }}
-                                    >
-                                      <img
-                                        src={file.url}
-                                        alt={file.name}
-                                        className="w-full h-full object-cover"
-                                      />
-                                    </a>
-                                    <div className="text-xs text-gray-500 truncate mt-1 max-w-20" title={file.name}>
-                                      {file.name}
-                                    </div>
-                                  </div>
-                                );
-                              } else {
-                                return (
-                                  <div key={`file-${index}-${file.name}-${file.url}`} className="relative">
-                                    <a
-                                      href={file.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="block w-20 h-14 bg-gray-100 border rounded flex items-center justify-center text-xl hover:bg-gray-200 transition-colors cursor-pointer"
-                                      style={{ aspectRatio: '4/3' }}
-                                    >
-                                      📄
-                                    </a>
-                                    <div className="text-xs text-gray-500 truncate mt-1 max-w-20" title={file.name}>
-                                      {file.name}
-                                    </div>
-                                  </div>
-                                );
-                              }
-                            })}
-                          </div>
-                        )}
-                        
-                        {/* Text content below files */}
-                        {msg.text && (
-                          <div className="word-wrap break-words" style={{ wordBreak: 'break-word', overflowWrap: 'break-word', hyphens: 'auto', lineHeight: '1.5' }}>
-                            {msg.text}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    
-                    {/* Display text only if no files are present */}
-                    {msg.text && (!msg.files || msg.files.length === 0) && (
-                      <div className="word-wrap break-words" style={{ wordBreak: 'break-word', overflowWrap: 'break-word', hyphens: 'auto', lineHeight: '1.5' }}>
-                        {msg.text}
-                      </div>
-                    )}
-                    
-                    {/* Backward compatibility - display single file if using old format */}
-                    {msg.fileUrl && !msg.files && (
-                      (() => {
-                        const ext = msg.fileName?.split('.').pop()?.toLowerCase();
-                        if (ext === 'pdf') {
-                          return (
-                            <div className="inline-block">
-                              <a
-                                href={msg.fileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-red-700 hover:bg-red-100 transition-colors cursor-pointer"
-                                title={`Open ${msg.fileName || 'PDF Document'}`}
-                              >
-                                <span className="text-red-500">📄</span>
-                                <span className="max-w-[150px] truncate font-medium">
-                                  {msg.fileName || 'PDF Document'}
-                                </span>
-                              </a>
-                            </div>
-                          );
-                        } else if (["png", "jpg", "jpeg", "gif", "bmp", "webp"].includes(ext || '')) {
-                          return (
-                            <img
-                              src={msg.fileUrl}
-                              alt={msg.fileName}
-                              className="max-w-xs max-h-32 rounded border"
-                              style={{ maxWidth: '200px' }}
-                            />
-                          );
-                        } else {
-                          return (
-                            <a
-                              href={msg.fileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 underline break-all text-sm"
-                            >
-                              📄 {msg.fileName || 'Open Document'}
-                            </a>
-                          );
-                        }
-                      })()
-                    )}
-                  </div>
-                  <div className={`text-xs text-gray-500 mt-1 whitespace-nowrap ${
-                    msg.type === 'user' ? 'self-end' : 'self-start'
-                  }`}>
-                    {msg.timestamp} • {msg.date}
-                  </div>
-                </div>
-              </div>
-            ))}
-            
-            {/* Empty state when no chat messages */}
-            {chatMessages.length === 0 && !isTyping && (
-              <div className="flex-grow flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-4xl mb-3">🤖</div>
-                  <div className="text-lg font-medium text-gray-700 mb-2">Ready to Chat</div>
-                  <div className="text-sm text-gray-500 mb-4">
-                    Click "Start Chat" to begin the conversation and get assistance with your project.
-                  </div>
-                  <div className="text-xs text-gray-400">
-                    Your conversation will appear here once you begin.
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {/* Typing Indicator */}
-            {isTyping && (
-              <div className="max-w-full flex items-start gap-2 self-start flex-row animate-fadeIn">
-                {/* Bot Avatar */}
-                <div className="flex-shrink-0 mt-0.5">
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center border-2 border-white shadow-md bg-white">
-                    <img src="/favicon.svg" alt="Certainti Logo" className="w-5 h-5" />
-                  </div>
-                </div>
-                {/* Typing Bubble */}
-                <div className="flex flex-col min-w-0 flex-1 max-w-[80%]">
-                  <div className="p-3 rounded-xl text-base shadow-sm border bg-gray-100 border-gray-200 text-gray-700 rounded-tl-sm max-w-fit">
-                    <div className="flex items-center gap-3">
-                      <div className="flex gap-1">
-                        <div className="w-2 h-2 rounded-full" style={{ 
-                          backgroundColor: 'rgba(45,62,79,255)', 
-                          animation: 'dotPulse 1.6s ease-in-out infinite',
-                          animationDelay: '0ms'
-                        }}></div>
-                        <div className="w-2 h-2 rounded-full" style={{ 
-                          backgroundColor: 'rgba(45,62,79,255)', 
-                          animation: 'dotPulse 1.6s ease-in-out infinite',
-                          animationDelay: '200ms'
-                        }}></div>
-                        <div className="w-2 h-2 rounded-full" style={{ 
-                          backgroundColor: 'rgba(45,62,79,255)', 
-                          animation: 'dotPulse 1.6s ease-in-out infinite',
-                          animationDelay: '400ms'
-                        }}></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Input Area */}
-          <div className="border-t border-gray-200 bg-white">
-            {/* Pending Files Display */}
-            {pendingFiles.length > 0 && (
-              <div className="px-4 pt-3 pb-2">
-                <div className="flex flex-wrap gap-1.5">
-                  {pendingFiles.map((file, index) => (
-                    <div
-                      key={`pending-${index}-${file.name}-${file.size}`}
-                      className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border"
-                      style={{ backgroundColor: 'rgba(237,249,240,255)', borderColor: 'rgba(220,232,255,255)' }}
-                    >
-                      <span className="truncate max-w-[120px]" style={{ color: 'rgba(45,62,79,255)' }}>
-                        📄 {file.name}
-                      </span>
-                      <button
-                        onClick={() => removePendingFile(index)}
-                        className="text-red-500 hover:text-red-700 text-sm leading-none w-3 h-3 flex items-center justify-center"
-                        title="Remove file"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {/* Input Controls */}
-            <div className="p-4 flex items-end gap-3">
-            <button 
-              onClick={handleVoiceRecord}
-              className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
-                isRecording 
-                  ? 'bg-red-100 text-red-600 hover:bg-red-200' 
-                  : ''
-              }`}
-              style={!isRecording ? { background: '#f2603b', color: '#fff' } : {}}
-              onMouseOver={e => { if (!isRecording) { (e.currentTarget as HTMLButtonElement).style.background = '#f2603b'; (e.currentTarget as HTMLButtonElement).style.color = '#fff'; } }}
-              onMouseOut={e => { if (!isRecording) { (e.currentTarget as HTMLButtonElement).style.background = '#f2603b'; (e.currentTarget as HTMLButtonElement).style.color = '#fff'; } }}
-            >
-              {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-            </button>
-            
-            <button
-              onClick={handleFileAttach}
-              className="w-10 h-10 flex items-center justify-center rounded-lg transition-colors"
-              style={{ backgroundColor: '#f2603b', color: '#fff' }}
-              onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#e55a35'; }}
-              onMouseOut={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#f2603b'; }}
-            >
-              <Paperclip className="w-5 h-5" />
-            </button>
-            
-            <input
-              ref={fileInputRef}
-              type="file"
-              onChange={handleFileSelect}
-              className="hidden"
-              accept="*/*"
-              multiple
-            />
-            
-            <textarea
-              ref={textareaRef}
-              value={message}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              placeholder={
-                chatSession.completed
-                  ? "Completed"
-                  : chatSession.isActive && chatSession.currentQuestion 
-                  ? "Type your answer here..." 
-                  : chatSession.isLoading
-                  ? "Loading..."
-                  : chatSession.isStarted
-                  ? "Waiting for next chat..."
-                  : "Loading..."
-              }
-              disabled={
-                chatSession.completed || 
-                chatSession.isLoading || 
-                (chatSession.isActive && !chatSession.currentQuestion) ||
-                (!chatSession.isActive && !chatSession.isStarted)
-              }
-              className="flex-grow border rounded-lg p-2 text-base min-h-[40px] max-h-[120px] resize-none outline-none transition-all duration-200 overflow-y-hidden"
-              style={{ 
-                borderColor: 'rgba(220,232,255,255)', 
-                backgroundColor: 'white',
-                color: 'rgba(45,62,79,255)'
-              }}
-              rows={1}
-            />
-            
-            <button
-              onClick={handleSend}
-              disabled={
-                chatSession.completed ||
-                chatSession.isLoading || 
-                (chatSession.isActive && chatSession.currentQuestion && !message.trim() && pendingFiles.length === 0) ||
-                (!chatSession.isActive && !chatSession.isStarted) ||
-                (!chatSession.isActive && !message.trim() && pendingFiles.length === 0)
-              }
-              className="w-10 h-10 flex items-center justify-center text-white rounded-lg disabled:cursor-not-allowed transition-colors"
-              style={{ 
-                backgroundColor: (
-                  chatSession.completed ||
-                  chatSession.isLoading || 
-                  (chatSession.isActive && chatSession.currentQuestion && !message.trim() && pendingFiles.length === 0) ||
-                  (!chatSession.isActive && !chatSession.isStarted) ||
-                  (!chatSession.isActive && !message.trim() && pendingFiles.length === 0)
-                ) ? '#d1d5db' : '#f2603b'
-              }}
-              onMouseOver={e => { 
-                if (!e.currentTarget.disabled) {
-                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#e55a35';
-                }
-              }}
-              onMouseOut={e => { 
-                if (!e.currentTarget.disabled) {
-                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#f2603b';
-                }
-              }}
-            >
-              {chatSession.isLoading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Send className="w-5 h-5" />
-              )}
-            </button>
-            </div>
-          </div>
+          {renderRightPanelContent()}
         </div>
       </div>
     </div>
