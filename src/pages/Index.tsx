@@ -1044,29 +1044,6 @@ const Index = () => {
     if (userRole === 'consultant') {
       return (
         <div className="flex flex-col h-full">
-          {/* Status Bar for Consultant */}
-          <div className="bg-blue-50 border-b border-blue-200 px-6 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-                <span className="text-sm font-medium text-blue-800">Live Interview Monitor</span>
-              </div>
-              <div className="flex items-center gap-4 text-xs">
-                {/* Session Status Indicator */}
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${sessionEnded ? 'bg-red-500' : 'bg-green-500'}`}></div>
-                  <span className={`font-medium ${sessionEnded ? 'text-red-600' : 'text-green-600'}`}>
-                    {sessionEnded ? 'Ended' : 'Active'}
-                  </span>
-                </div>
-                {/* Message Count */}
-                <div className="text-blue-600">
-                  {timelineEntries.length > 0 ? `${timelineEntries.length} messages` : 'Waiting for interview...'}
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Chat Messages Container for Consultant */}
           <div className="flex-grow p-6 overflow-y-auto flex flex-col gap-4 min-h-[400px]">
             {/* Display all history as chat messages */}
@@ -1134,7 +1111,19 @@ const Index = () => {
     // Admin role: Show all history as chat messages with End Session button
     if (userRole === 'admin') {
       return (
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full relative">
+          {/* Floating Question Progress Indicator */}
+          {chatSession.totalQuestions > 0 && (
+            <div className="absolute top-3 right-3 z-10 rounded-lg shadow-lg px-3 py-1.5" style={{ backgroundColor: '#2d3e4f' }}>
+              <div className="flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#32cd32' }}></div>
+                <span className="text-xs font-medium" style={{ color: '#ffffff' }}>
+                  {chatSession.progress || 0}/{chatSession.totalQuestions}
+                </span>
+              </div>
+            </div>
+          )}
+          
           {/* Chat Messages Container for Admin */}
           <div className="flex-grow p-6 overflow-y-auto flex flex-col gap-4 min-h-[400px]">
             <div className="mb-4">
@@ -1445,14 +1434,25 @@ const Index = () => {
           {chatMessages.length === 0 && !isTyping && (
             <div className="flex-grow flex items-center justify-center">
               <div className="text-center">
-                <div className="text-4xl mb-3">🤖</div>
-                <div className="text-lg font-medium text-gray-700 mb-2">Ready to Start Interview</div>
-                <div className="text-sm text-gray-500 mb-4">
-                  Click "Start Interview" to begin the session and receive your first question.
-                </div>
-                <div className="text-xs text-gray-400">
-                  Your conversation will appear here once you begin.
-                </div>
+                {!projectData && !isLoading && !isContextLoading ? (
+                  // Project not found state (only when not loading)
+                  <>
+                    <div className="text-4xl mb-3">❌</div>
+                    <div className="text-lg font-medium text-gray-700 mb-2">Project Not Found</div>
+                    <div className="text-sm text-gray-500 mb-4">
+                      Unable to load project data. Please check the project ID.
+                    </div>
+                  </>
+                ) : (
+                  // Always show loading when data is being fetched or not ready
+                  <>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-3"></div>
+                    <div className="text-lg font-medium text-gray-700 mb-2">Loading...</div>
+                    <div className="text-sm text-gray-500 mb-4">
+                      Preparing your interview session...
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -1637,6 +1637,37 @@ const Index = () => {
     );
   };
 
+  // Handle loading states
+  if (isLoading || isContextLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="text-lg font-medium text-gray-700">Loading...</div>
+          <div className="text-sm text-gray-500">Fetching project data...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle error states - project not found
+  if (error || contextError || !projectData) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center max-w-md">
+          <div className="text-6xl mb-4">❌</div>
+          <div className="text-xl font-medium text-gray-800 mb-2">Project Not Found</div>
+          <div className="text-sm text-gray-600 mb-4">
+            The project with ID <span className="font-mono bg-gray-100 px-2 py-1 rounded">{PROJECT_ID}</span> was not found in the database.
+          </div>
+          <div className="text-xs text-gray-500">
+            Please check the project ID and try again, or contact your administrator.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex flex-col overflow-hidden" style={{ backgroundColor: 'rgba(220,232,255,255)' }}>
       {/* Top Navigation Bar with SME Project Info */}
@@ -1659,7 +1690,20 @@ const Index = () => {
           <div className="w-full h-full border-r-0 flex flex-col bg-white shadow-lg overflow-hidden">
             {/* Fixed Conversation Summary Card */}
             <div className="sticky top-0 z-10 p-4 border-b-0" style={{ backgroundColor: 'rgba(237,249,240,255)' }}>
-              <div className="font-semibold text-lg mb-2 w-full text-left" style={{ color: 'rgba(45,62,79,255)' }}>Summary</div>
+              <div className="flex items-center justify-between mb-2 w-full">
+                <div className="font-semibold text-lg" style={{ color: 'rgba(45,62,79,255)' }}>Summary</div>
+                {/* Active/Ended Status Badge */}
+                {userRole === 'consultant' && (
+                  <div className="rounded-lg shadow-md px-2 py-1" style={{ backgroundColor: '#2d3e4f' }}>
+                    <div className="flex items-center gap-1">
+                      <div className={`w-1.5 h-1.5 rounded-full ${sessionEnded ? 'bg-red-400' : 'bg-green-400'}`}></div>
+                      <span className="text-xs font-medium" style={{ color: '#ffffff' }}>
+                        {sessionEnded ? 'Ended' : 'Active'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="rounded-xl p-4 shadow-sm border-0 flex flex-col custom-scrollbar" style={{ minHeight: '120px', maxHeight: '220px', overflowY: 'auto', backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
                 <div className="space-y-3 text-sm w-full">
                   {/* Show only the summary from the project data, not the full TopNavBar */}
@@ -1675,6 +1719,32 @@ const Index = () => {
                 <div className="font-semibold text-lg" style={{ color: 'rgba(45,62,79,255)' }}>
                   Context History
                 </div>
+                {/* Status Indicators for Consultant View */}
+                {userRole === 'consultant' && (
+                  <div className="flex gap-2">                    
+                    {/* Question Progress */}
+                    {chatSession.totalQuestions > 0 && (
+                      <div className="rounded-lg shadow-md px-2 py-1" style={{ backgroundColor: '#edf9f0' }}>
+                        <div className="flex items-center gap-1">
+                          <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#2d3e4f' }}></div>
+                          <span className="text-xs font-medium" style={{ color: '#2d3e4f' }}>
+                            Questions answered: {chatSession.progress || 0}/{chatSession.totalQuestions}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Message Count */}
+                    <div className="rounded-lg shadow-md px-2 py-1" style={{ backgroundColor: '#dce8ff' }}>
+                      <div className="flex items-center gap-1">
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#2d3e4f' }}></div>
+                        <span className="text-xs font-medium" style={{ color: '#2d3e4f' }}>
+                          {timelineEntries.length} messages
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1724,17 +1794,34 @@ const Index = () => {
                     </div>
                   </>
                 ) : (
-                  /* Welcome message when no conversation history yet */
+                  /* Loading or error state when no conversation history yet */
                   <div className="flex items-center justify-center h-full text-gray-500">
                     <div className="text-center max-w-md">
-                      <div className="text-4xl mb-4">💬</div>
-                      <div className="text-lg font-medium text-gray-700 mb-2">Welcome to Smart Assistant</div>
-                      <div className="text-sm text-gray-500 mb-4">
-                        Project ID: <span className="font-medium text-gray-700">{PROJECT_ID}</span>
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        Get started with your AI assistant to help improve your project through intelligent conversations.
-                      </div>
+                      {!projectData && !isLoading && !isContextLoading ? (
+                        // Project not found state (only when not loading)
+                        <>
+                          <div className="text-4xl mb-4">❌</div>
+                          <div className="text-lg font-medium text-gray-700 mb-2">Project Not Found</div>
+                          <div className="text-sm text-gray-500 mb-4">
+                            Project ID: <span className="font-medium text-red-600">{PROJECT_ID}</span>
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            This project does not exist in the database. Please verify the project ID.
+                          </div>
+                        </>
+                      ) : (
+                        // Always show loading when data is being fetched or not ready
+                        <>
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                          <div className="text-lg font-medium text-gray-700 mb-2">Loading...</div>
+                          <div className="text-sm text-gray-500 mb-4">
+                            Project ID: <span className="font-medium text-gray-700">{PROJECT_ID}</span>
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            Fetching conversation history...
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}
