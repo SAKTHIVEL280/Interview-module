@@ -299,8 +299,9 @@ const Index = () => {
   useEffect(() => {
     if (PROJECT_ID) {
       fetchAnsweredQuestions(PROJECT_ID);
+      fetchAnsweredQuestionNumbers(PROJECT_ID);
     }
-  }, [PROJECT_ID, fetchAnsweredQuestions]);
+  }, [PROJECT_ID, fetchAnsweredQuestions, fetchAnsweredQuestionNumbers]);
 
   // Clean up duplicate entries in context history
   const cleanupDuplicateEntries = async () => {
@@ -1019,7 +1020,11 @@ const Index = () => {
           // Endpoint not found - server might not be fully updated
           // Silently continue without session checking
           console.warn('Session status endpoint not available - continuing without session management');
-          return;
+        }
+        
+        // Also refresh answered questions count for real-time updates
+        if (PROJECT_ID) {
+          fetchAnsweredQuestionNumbers(PROJECT_ID);
         }
       } catch (error) {
         // Network error or server down - silently continue
@@ -1118,7 +1123,7 @@ const Index = () => {
               <div className="flex items-center gap-1.5">
                 <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#32cd32' }}></div>
                 <span className="text-xs font-medium" style={{ color: '#ffffff' }}>
-                  {chatSession.progress || 0}/{chatSession.totalQuestions}
+                  {answeredQuestionNumbers.length}/{chatSession.totalQuestions}
                 </span>
               </div>
             </div>
@@ -1126,11 +1131,6 @@ const Index = () => {
           
           {/* Chat Messages Container for Admin */}
           <div className="flex-grow p-6 overflow-y-auto flex flex-col gap-4 min-h-[400px]">
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">Live Interview Monitor</h3>
-              <p className="text-sm text-gray-600">Real-time view of the interview conversation</p>
-            </div>
-
             {/* Display all history as chat messages */}
             {timelineEntries.length > 0 ? (
               timelineEntries.map((entry, index) => (
@@ -1728,7 +1728,7 @@ const Index = () => {
                         <div className="flex items-center gap-1">
                           <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#2d3e4f' }}></div>
                           <span className="text-xs font-medium" style={{ color: '#2d3e4f' }}>
-                            Questions answered: {chatSession.progress || 0}/{chatSession.totalQuestions}
+                            Questions answered: {answeredQuestionNumbers.length}/{chatSession.totalQuestions}
                           </span>
                         </div>
                       </div>
